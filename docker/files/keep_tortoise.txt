@@ -1,0 +1,23 @@
+# keep-list for tortoise, relative to the package's top directory (the one
+#   holding bin/ and settings/): the 16 programs the dwi step runs (four in
+#   bin/DRTAMAS/ since release 4.3.0), and the settings TORTOISEProcess reads
+#   from bin/../settings
+d settings
+d settings/mecc_settings
+d settings/system_settings
+f bin/DRTAMAS/ApplyTransformationToScalar2
+f bin/CombineDWIsWithBmatrix
+f bin/CreateNonlinearityDisplacementMap
+f bin/DRTAMAS/DisplacementFieldOperations
+f bin/ExtractComponentFromDisplacementField
+f bin/ExtractDWISubset
+f bin/ExtractImage
+f bin/FSLBVecsToTORTOISEBmatrix
+f bin/IsDirectionPositiveDet
+f bin/ReorientImage3D
+f bin/SelectBestB0
+f bin/DRTAMAS/SetFieldToIsocenter
+f bin/SmoothTransitionHCPStructural
+f bin/TORTOISEBmatrixToFSLBVecs
+f bin/TORTOISEProcess
+f bin/DRTAMAS/ZeroFieldDims

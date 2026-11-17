@@ -1,0 +1,4 @@
+#!/bin/sh
+# fsl_abspath - return true file path (os.path.realpath), in place of FSL's
+# fslpython script, so fslpython need not be kept
+exec realpath -m "$1"

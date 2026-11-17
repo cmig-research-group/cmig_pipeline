@@ -1,0 +1,5 @@
+# versions of the repos installed with this cmig_pipeline_dev version,
+# read by SetUpCMIG.csh: <repo> <version>
+surface_morphometry_toolbox 0.0.0
+gradient_distortion_fields 0.0.0
+cmig_pipeline_atlases 0.1.0

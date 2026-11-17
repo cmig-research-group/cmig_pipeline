@@ -1,0 +1,23 @@
+# keep-list for fsl, relative to /usr/pubsw/packages/fsl/fsl-6.0.4-centos7
+# from the 10/26-27/2026 trace run 4 and the code check
+# and the programs the dwi step runs (its script, epi_reg and Synb0-DISCO)
+d etc/flirtsch
+d etc/fslconf
+f bin/applytopup
+f bin/applywarp
+f bin/convert_xfm
+f bin/epi_reg
+f bin/fast
+f bin/flirt
+f bin/fsl_abspath
+f bin/fslhd
+f bin/fslinfo
+f bin/fslmaths
+f bin/fslmerge
+f bin/imrm
+f bin/imtest
+f bin/mcflirt
+f bin/remove_ext
+f bin/topup
+f lib/libgfortran.so.3
+f lib/libopenblas.so.0

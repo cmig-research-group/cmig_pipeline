@@ -1,0 +1,76 @@
+# color codes for the cmig modules' custom regions: fiber tract
+#   segmentations and group or summary ROIs
+# MMIL_ColorLUT.txt with each code from 10000 to 11999 moved up by 11000, so
+#   none collides with FreeSurfer 8.x's FreeSurferColorLUT, which reuses
+#   10000-range codes and whose highest code is 15137; 20001-20010 unchanged
+# MMIL_ColorLUT.txt keeps the old codes for the MMIL_* code
+# Don Hagler, CMIG, September 28, 2026
+# color codes for fiber tract segmentations
+# Don Hagler, MMIL, April 26, 2011
+21101  Right-Fornix                          0     255  255   0  # cyan
+21102  Left-Fornix                           0     255  255   0  # cyan
+22011  Right-Fornix-cut                      0     255  255   0  # cyan
+22021  Left-Fornix-cut                       0     255  255   0  # cyan
+21103  Right-cing-Cingulum                   255   232  32    0  # gold
+21104  Left-cing-Cingulum                    255   232  32    0  # gold
+21105  Right-phipp-Cingulum                  232   232  0     0  # bright yellow
+21106  Left-phipp-Cingulum                   232   232  0     0  # bright yellow
+21107  Right-Pyramidal-Tract                 0     64   160   0  # light blue
+21108  Left-Pyramidal-Tract                  0     64   160   0  # light blue
+21109  Right-Ant-Thalamic-Radiations         32    222  96    0  # bluish green
+21110  Left-Ant-Thalamic-Radiations          32    222  96    0  # bluish green
+21115  Right-Uncinate-Fasciculus             255   128  0     0  # orange
+21116  Left-Uncinate-Fasciculus              255   128  0     0  # orange
+21117  Right-Inf-Long-Fasciulus              160   64   128   0  # pink/purple
+21118  Left-Inf-Long-Fasciulus               160   64   128   0  # pink/purple
+21119  Right-Inf-Fronto-Occ-Fasciculus       128   255  0     0  # bright yellowish green
+21120  Left-Inf-Fronto-Occ-Fasciculus        128   255  0     0  # bright yellowish green
+21121  Forceps-Major                         255   0    0     0  # bright red
+21122  Forceps-Minor                         255   0    0     0  # bright red
+21123  Corpus-Callosum                       255   0    0     0  # bright red
+21133  Right-Sup-Long-Fasciculus             96    222  32    0  # yellowish green
+21134  Left-Sup-Long-Fasciculus              96    222  32    0  # yellowish green
+21135  Right-temp-Sup-Long-Fasciculus        108   32   64    0  # magenta
+21136  Left-temp-Sup-Long-Fasciculus         108   32   64    0  # magenta
+21137  Right-par-Sup-Long-Fasciculus         32    222  96    0  # bluish green
+21138  Left-par-Sup-Long-Fasciculus          32    222  96    0  # bluish green
+21139  Right-Optic-Radiations                 222   64   32    0  # greenish red
+21140  Left-Optic-Radiations                222   64   32    0  # greenish red
+21141  Right-Sup-Corticostriate               222   32   64    0  # bluish red
+21142  Left-Sup-Corticostriate              222   32   64    0  # bluish red
+21143  Right-front-Sup-Corticostriate         222   32   64    0  # bluish red
+21144  Left-front-Sup-Corticostriate        222   32   64    0  # bluish red
+21145  Right-par-Sup-Corticostriate           222   32   64    0  # bluish red
+21146  Left-par-Sup-Corticostriate          222   32   64    0  # bluish red
+21147  Right-Striatal-Inf-Frontal             0     255  128   0  # bright bluish green
+21148  Left-Striatal-Inf-Frontal            0     255  128   0  # bright bluish green
+21149  Right-Inf-Frontal-Sup-Frontal          64    128  32    0  # dark green
+21150  Left-Inf-Frontal-Sup-Frontal         64    128  32    0  # dark green
+21202  Two-Overlapping-Fiber-Tracts          28    0    28    0  # dark purple
+21203  Three-Overlapping-Fiber-Tracts        38    0    38    0  # dark purple
+21204  Four-Overlapping-Fiber-Tracts         48    0    48    0  # dark purple
+21205  Five-Overlapping-Fiber-Tracts         58    0    58    0  # dark purple
+21206  Six-Overlapping-Fiber-Tracts          68    0    68    0  # dark purple
+21207  Seven-Overlapping-Fiber-Tracts        78    0    78    0  # dark purple
+21208  Eight-Overlapping-Fiber-Tracts        88    0    88    0  # dark purple
+21209  Nine-Overlapping-Fiber-Tracts         98    0    98    0  # dark purple
+
+
+# codes for group or summary ROIs
+# Don Hagler, MMIL, 2010
+21001  WholeBrain 0 0 0 0
+21002  LatVentricles 0 0 0 0
+21003  AllVentricles 0 0 0 0
+21011  LeftHippo1 0 0 0 0
+21012  LeftHippo2 0 0 0 0
+21013  LeftHippo3 0 0 0 0
+21014  RightHippo1 0 0 0 0
+21015  RightHippo2 0 0 0 0
+21016  RightHippo3 0 0 0 0
+20001  BrainMaskVolume 0 0 0 0
+20002  BrainSegmentationVolume 0 0 0 0
+20003  IntracranialVolume 0 0 0 0
+20004  SegmentedIntracranialVolume 0 0 0 0
+20008  SupratentorialVolumeNotVent 0 0 0 0
+20009  SupratentorialVolume 0 0 0 0
+20010  SubCorticalGrayVolume 0 0 0 0

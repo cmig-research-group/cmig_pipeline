@@ -1,0 +1,58 @@
+#!/bin/csh -f
+# cmig_python3 [python arguments]
+#   run python3 (Python 3.12 and the pipeline's pinned packages) from the
+#   python singularity image, the base stage of the CMIG BIDS app image
+#   (cmig_build_run_bids_module.py --python_sing_flag 1), in place of the
+#   host's python3: the pipeline python then calls the host's compiled app,
+#   FreeSurfer, FSL and AFNI under /usr/pubsw, from the image's Rocky 8
+#   userland
+#
+#   /space, /home and /usr/pubsw are bound in, and the environment is passed
+#   (no --cleanenv: PATH, PYTHONPATH, FREESURFER_HOME, FSLDIR and the rest
+#   come from the host); /usr/local/bin, which holds the image's python3 and
+#   python, goes first on PATH, so a python3 the pipeline starts is also
+#   the image's
+#
+#   CMIG_PYTHON_IMAGE   the image (default below)
+#   CMIG_PYTHON_SING    the singularity (or apptainer) command (default:
+#                       singularity, else apptainer, from PATH)
+#
+# Created:  10/29/2026 by Don Hagler
+# Last mod: 10/29/2026 by Don Hagler
+
+if (! $?CMIG_PYTHON_IMAGE) then
+  setenv CMIG_PYTHON_IMAGE /usr/pubsw/packages/MMPS/apps/images/cmig_python-mmps_djh.sif
+endif
+if (! -e "$CMIG_PYTHON_IMAGE") then
+  echo "cmig_python3: ERROR: image $CMIG_PYTHON_IMAGE not found (CMIG_PYTHON_IMAGE)" > /dev/stderr
+  exit 1
+endif
+
+if ($?CMIG_PYTHON_SING) then
+  set sing = "$CMIG_PYTHON_SING"
+else
+  set sing = ""
+  foreach s (singularity apptainer)
+    foreach p ($path)
+      if ("$sing" == "" && -x $p/$s) set sing = $p/$s
+    end
+  end
+  if ("$sing" == "") then
+    echo "cmig_python3: ERROR: neither singularity nor apptainer on PATH" > /dev/stderr
+    exit 1
+  endif
+endif
+
+# the host's PATH inside, after the image's python
+if ("$sing:t" == "apptainer") then
+  setenv APPTAINERENV_PATH "/usr/local/bin:${PATH}"
+else
+  setenv SINGULARITYENV_PATH "/usr/local/bin:${PATH}"
+endif
+
+set binds = ()
+foreach d (/space /home /usr/pubsw)
+  if (-d $d) set binds = ($binds -B $d)
+end
+
+exec $sing exec $binds "$CMIG_PYTHON_IMAGE" /usr/local/bin/python3 $argv:q

@@ -1,0 +1,58 @@
+--- a/data_processing/normalize_T1.sh
++++ b/data_processing/normalize_T1.sh
+@@ -27,7 +27,7 @@
+ 
+ # Do N3 correction
+ echo -------
+-N4_CMD="mri_nu_correct.mni --i $JOB_PATH/T1.mgz --o $JOB_PATH/T1_N3.mgz --n 2"
++N4_CMD="mri_nu_correct.mni --i $JOB_PATH/T1.mgz --o $JOB_PATH/T1_N3.mgz --n 2 --ants-n4"
+ echo $N4_CMD
+ eval $N4_CMD
+ 
+--- a/data_processing/prepare_input.sh
++++ b/data_processing/prepare_input.sh
+@@ -30,7 +30,7 @@
+ echo Normalizing T1
+ T1_N3_PATH=$JOB_PATH/T1_N3.nii.gz
+ T1_NORM_PATH=$JOB_PATH/T1_norm.nii.gz
+-NORMALIZE_CMD="normalize_T1.sh $T1_PATH $T1_N3_PATH $T1_NORM_PATH"
++NORMALIZE_CMD="$( dirname $( realpath $0 ) )/normalize_T1.sh $T1_PATH $T1_N3_PATH $T1_NORM_PATH"
+ echo $NORMALIZE_CMD
+ eval $NORMALIZE_CMD
+ 
+@@ -40,16 +40,8 @@
+ # This step exists because epi_reg requires an extracted brain. It uses the name of the atlas to
+ # track stripped status--not a super elegant solution
+ echo -------
+-T1_MASK_PATH=$JOB_PATH/T1_mask.nii.gz
+-if [[ "$T1_ATLAS_PATH" == *"mask"* ]]; then 
+-  echo Copying user provided T1 Mask
+-  cp $T1_PATH $T1_MASK_PATH
+-else
+-  echo Skull stripping T1
+-  BET_CMD="bet $T1_PATH $T1_MASK_PATH -R"
+-  echo $BET_CMD
+-  eval $BET_CMD
+-fi
++T1_MASK_PATH=`dirname $T1_PATH`/T1_brain.nii.gz
++
+ 
+ # epi_reg distorted b0 to T1; wont be perfect since B0 is distorted
+ echo -------
+--- a/src/inference.py
++++ b/src/inference.py
+@@ -80,11 +80,12 @@
+     # Run code ---------------------------------------------#
+ 
+     # Get device
+-    device = torch.device("cuda")
++    #device = torch.device("cuda")
++    device = torch.device("cpu")
+ 
+     # Get model
+     model = UNet3D(2, 1).to(device)
+-    model.load_state_dict(torch.load(model_path))
++    model.load_state_dict(torch.load(model_path,map_location=torch.device('cpu') ))
+ 
+     # Inference
+     img_model = inference(T1_input_path, b0_input_path, model, device)

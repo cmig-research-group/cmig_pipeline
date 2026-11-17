@@ -1,0 +1,17 @@
+rule_id	error_class	module	pattern	note
+np_prefix	not_processed	*	(^|: )not processed:	the refusal contract: a module that declines a session prefixes its errmsg
+np_no_usable	not_processed	*	\bno usable\b	refusals written before the prefix (MATLAB modules, cmig_check_bids_func)
+np_no_data	not_processed	rawqc	^no data found$	cmig_rawqc_bids before the prefix
+np_volume_only	not_processed	analyze	is volume-only; surface sampling requires a complete recon	cmig_analyze_bids_func/dwi before the prefix
+mi_not_run	missing_input	*	^no status file: not run after an earlier step failed$	a step the pipeline skipped because one before it failed (written by the catalog)
+fr_short_read	file_read	*	tried to read .* actually read	a truncated file
+fr_header	file_read	*	failed to read header info|corrupted file|fs_load_mgh	an unreadable or truncated file
+in_cancel	infrastructure	*	CANCELLED|DUE TO TIME LIMIT|oom[-_ ]kill|[Oo]ut of [Mm]emory|Killed	the scheduler ended the job
+in_license	infrastructure	*	[Ll]icen[cs]e[^.]*not found|FS_LICENSE	the FreeSurfer license
+in_library	infrastructure	*	[Cc]an't load .*\.so|cannot open shared object|error while loading shared libraries	a library that does not load in the image or on the host
+in_lost	infrastructure	*	^no status file$	the job ended with no status file and nothing in its .err (written by the catalog)
+mi_not_found	missing_input	*	not found|missing file|no processed .* found|no T1w proc file|no proc T1w|couldNotReadFile|Unable to find file	an upstream output that should exist is absent
+fa_logical	failure	*	nonLogicalConditional|Operands to the logical	a MATLAB logical conditional error
+fa_fsurf	failure	fsurf	FreeSurfer command ended in error|recon-all.*exited with ERRORS	recon-all failed
+fa_matlab	failure	*	^Error in |MATLAB:\w+|Error using 	a MATLAB exception
+fa_failed	failure	*	failed|differs for|[Ee]rror	the module ran and reported a failure

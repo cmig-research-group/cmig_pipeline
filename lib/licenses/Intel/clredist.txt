@@ -1,0 +1,7 @@
+List of Re-distributable Files for Intel(R) Compilers for Linux with Cluster OpenMP
+crtclusterbegin.o
+crtclusterend.o
+libclompc.so
+libclusterguide.so
+libclusterguide_stats.so
+sharable_init.o

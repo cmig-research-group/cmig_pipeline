@@ -1,0 +1,14 @@
+name,abbrev
+Auditory,aud
+CinguloOperc,cio
+CinguloParietal,cip
+Default,def
+DorsalAttn,doa
+FrontoParietal,frp
+None,non
+RetrosplenialTemporal,ret
+Salience,sal
+SMhand,smh
+SMmouth,smm
+VentralAttn,vea
+Visual,vis

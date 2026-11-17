@@ -1,0 +1,67 @@
+#!/bin/csh -f
+
+#############################################################################
+# run_matlab_script
+#
+# created:  10/13/23 by Don Hagler
+# prev mod: 10/15/23 by Don Hagler
+# prev mod: 08/22/24 by Don Hagler
+# prev mod: 09/24/24 by Don Hagler
+# prev mod: 09/26/24 by Don Hagler
+# prev mod: 10/03/24 by Don Hagler
+# prev mod: 06/05/25 by Don Hagler
+# last mod: 05/29/26 by Don Hagler
+#
+#############################################################################
+
+if($#argv < 1) then
+  goto usage_exit;
+  exit 1;
+endif
+
+set scriptname = $1
+set strlen = `printf $scriptname | wc -m`
+if ($strlen == 0) then
+  goto usage_exit;
+endif
+
+if($#argv > 1) then
+  set version = $2
+  set strlen = `printf $version | wc -m`
+  if ($strlen != 0) then
+    source $PUBSH/bin/SetUpMatlab.csh $version
+    unalias matlab
+  endif
+endif
+
+# remove terminal '.m' from scriptname if present
+set scriptname = `echo $scriptname | sed s/'\.m$'//1`
+
+# document host name
+echo "HOSTNAME = " $HOSTNAME
+
+# run matlab command and quit
+echo matlab -nosplash -nodesktop -r "run('$scriptname'); exit"
+matlab -nosplash -nodesktop -r "run('$scriptname'); exit"
+
+###########################################################
+
+exit 0;
+
+###############################################################################
+
+usage_exit:
+  echo " "
+  echo "USAGE: run_matlab_script <scriptname> <version>"
+  echo " "
+  echo "Required Arguments:"
+  echo "  scriptname : full path of matlab script name"
+  echo " "
+  echo "Optional Arguments:"
+  echo "  version : MATLAB version"
+  echo " "
+  
+exit 1;
+
+###############################################################################
+

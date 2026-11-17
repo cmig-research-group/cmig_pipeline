@@ -1,0 +1,364 @@
+The CMIG BIDS app is shared as a container image holding multiple components:
+  A. The compiled CMIG BIDS app and its container image
+  B. Scripts and configuration files
+  C. Miscellaneous libraries
+  D. Brain atlas image files
+  E. Gradient nonlinearity field correction files
+  F. Publicly available and/or redistributable software
+    a. AFNI
+    b. ANTs
+    c. Convert3D (c3d_affine_tool)
+    d. FreeSurfer
+    e. FSL
+    f. GNU Scientific Library
+    g. Intel C++ Compiler and Math Kernel Library runtime libraries
+    h. libg2c (GNU Fortran 77 runtime library)
+    i. MATLAB Runtime
+    j. MNI ICBM152 2009c atlases (with Synb0-DISCO)
+    k. Python and Python packages
+    l. Rocky Linux
+    m. Synb0-DISCO
+    n. TORTOISE
+
+Paths below are inside the image. The license texts named are in
+/documentation/licenses; those of the third-party packages are copied there
+from each package as installed when the image is built.
+
+###########################################################################
+
+A. The compiled CMIG BIDS app and its container image
+
+/usr/pubsw/packages/MMPS/apps/cmig_run_bids_module
+the Docker image (cmig_bids) and the Singularity image (cmig_bids-*.sif)
+
+Code written at UC San Diego, 2006 to April 2025:
+
+This software is Copyright © 2006-2025 The Regents of the University of California. All Rights Reserved. Permission to copy, modify, and distribute this software and its documentation for educational, research and non-profit purposes, without fee, and without a written agreement is hereby granted, provided that the above copyright notice, this paragraph and the following three paragraphs appear in all copies. Permission to make commercial use of this software may be obtained by contacting:
+Office of Innovation and Commercialization
+9500 Gilman Drive, Mail Code 0910
+University of California
+La Jolla, CA 92093-0910
+oic-commercialize@ucsd.edu
+
+This software program and documentation are copyrighted by The Regents of the University of California. The software program and documentation are supplied “as is”, without any accompanying services from The Regents. The Regents does not warrant that the operation of the program will be uninterrupted or error-free. The end-user understands that the program was developed for research purposes and is advised not to rely exclusively on the program for any reason.
+
+IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN “AS IS” BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+Code written since April 2025, at the J. Craig Venter Institute (JCVI), and changes made since then to the code above:
+
+Required Notice: Copyright (c) 2025-2026 Donald J. Hagler, Jr., Anders Dale
+Licensed under the PolyForm Noncommercial License 1.0.0
+https://polyformproject.org/licenses/noncommercial/1.0.0
+see: licenses/PolyForm-Noncommercial-1.0.0.md
+
+The following functions are copied from or based on FreeSurfer's MATLAB functions, Copyright The General Hospital Corporation (Boston, MA), and are distributed under the FreeSurfer Software License Agreement: fs_colorlut.m, fs_fread3.m, fs_load_mgh.m, fs_load_nifti.m, fs_load_nifti_hdr.m, fs_read_annotation.m, fs_read_curv.m, fs_read_label.m, fs_read_surf.m, fs_save_mgh.m, fs_write_label.m.
+
+The compiled app includes parts of the Surface Morphometry Toolbox (Copyright (c) Anders Dale, Mukund Balasubramanian and Gennan Chen; all rights reserved), in compiled, encrypted form, with some of its MEX and data files. They are included with permission, are not covered by the notices above, and may be used only as part of the CMIG BIDS app; they may not be extracted or redistributed separately.
+
+###########################################################################
+
+B. Scripts and configuration files
+
+/usr/pubsw/bin/SetUpFreeSurfer.csh
+/usr/pubsw/packages/cmig_pipeline/bash
+/usr/pubsw/packages/cmig_pipeline/bin
+/usr/pubsw/packages/cmig_pipeline/csh
+/usr/pubsw/packages/cmig_pipeline/parms
+/usr/pubsw/packages/cmig_pipeline/python
+
+As section A: the code written at UC San Diego, 2006 to April 2025, under the notice of The Regents of the University of California given there; the code written since April 2025, at JCVI, and changes made since then, under the PolyForm Noncommercial License 1.0.0:
+
+Required Notice: Copyright (c) 2025-2026 Donald J. Hagler, Jr., Anders Dale
+Licensed under the PolyForm Noncommercial License 1.0.0
+https://polyformproject.org/licenses/noncommercial/1.0.0
+see: licenses/PolyForm-Noncommercial-1.0.0.md
+
+The dMRI processing script, bash/cmig_proc_dwi.bash, is based on the diffusion MRI processing script by M. Okan Irfanoglu, National Institutes of Health, written as part of his official duties; it is a work of the United States Government and is not subject to copyright in the United States. The contents of this work do not necessarily reflect the position or the policy of the government, and no official endorsement should be inferred. The changes to it made at the J. Craig Venter Institute are under the PolyForm Noncommercial License 1.0.0.
+
+The python files of the dMRI processing, cmig_proc_bids_dwi.py, cmig_check_bids_dwi_inputs.py, cmig_check_bids_dwi_outputs.py, cmig_select_bids_dwi_runs.py, cmig_select_bids_fmap.py, cmig_get_bids_gradwarpinfo.py, cmig_read_bids_sidecar.py, cmig_write_bids_dwi_sidecar.py, cmig_finish_bids_dwi_series.py and cmig_dwi_atlas_b0_start.py, were written at the J. Craig Venter Institute:
+
+Required Notice: Copyright (c) 2026 Diliana Pecheva, Donald J. Hagler, Jr.
+Licensed under the PolyForm Noncommercial License 1.0.0
+https://polyformproject.org/licenses/noncommercial/1.0.0
+see: licenses/PolyForm-Noncommercial-1.0.0.md
+
+bash/cmig_synb0_disco.sh is based on Synb0-DISCO's src/pipeline.sh and is under Synb0-DISCO's MIT License (see Synb0-DISCO in section F).
+
+###########################################################################
+
+C. Miscellaneous libraries
+
+/usr/pubsw/packages/cmig_pipeline/lib/libcorstruct.so (BasicStructs)
+/usr/pubsw/packages/cmig_pipeline/lib/libcorinterp.so (Interpolation)
+
+Written by Dominic Holland at UC San Diego, under the notice of section A:
+Copyright © 2008-2010 The Regents of the University of California.
+
+###########################################################################
+
+D. Brain atlas image files
+
+/usr/pubsw/packages/cmig_pipeline_atlases/DTI_Atlas
+/usr/pubsw/packages/cmig_pipeline_atlases/T1T2
+/usr/pubsw/packages/cmig_pipeline_atlases/T1_Atlas
+/usr/pubsw/packages/cmig_pipeline_atlases/fuzzy_clusters
+
+The atlas files were made at UC San Diego:
+
+This work is Copyright © 2010-2020 The Regents of the University of California. All Rights Reserved. Permission to copy, modify, and distribute this work and its documentation for educational, research and non-profit purposes, without fee, and without a written agreement is hereby granted, provided that the above copyright notice, this paragraph and the following three paragraphs appear in all copies. Permission to make commercial use of this work may be obtained by contacting:
+Office of Innovation and Commercialization
+9500 Gilman Drive, Mail Code 0910
+University of California
+La Jolla, CA 92093-0910
+oic-commercialize@ucsd.edu
+
+This work and documentation are copyrighted by The Regents of the University of California. The work and documentation are supplied “as is”, without any accompanying services from The Regents. The Regents does not warrant that the operation of the work will be uninterrupted or error-free. The end-user understands that the work was developed for research purposes and is advised not to rely exclusively on the work for any reason.
+
+IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS WORK AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE WORK PROVIDED HEREUNDER IS ON AN “AS IS” BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+###########################################################################
+
+E. Gradient nonlinearity field correction files
+
+/usr/pubsw/packages/gradient_distortion_fields
+
+The distortion field data files (*.mgh), from the
+gradient_distortion_fields repository, release 1.0.0
+(https://github.com/cmig-research-group/gradient_distortion_fields), were
+made at UC San Diego and are under UC San Diego's notice of section D,
+Copyright © 2006-2025 The Regents of the University of California.
+
+The function that names them, gradient_distortion_files.m from the same
+repository, is compiled into the app (section A). It is code written at UC
+San Diego (from mmil_grad_files.m, 2021-2025), under the notice of section
+A, Copyright © 2021-2025 The Regents of the University of California; the
+changes made since at the J. Craig Venter Institute are under the PolyForm
+Noncommercial License 1.0.0:
+
+Required Notice: Copyright (c) 2026 Donald J. Hagler, Jr.
+Licensed under the PolyForm Noncommercial License 1.0.0
+https://polyformproject.org/licenses/noncommercial/1.0.0
+see: licenses/PolyForm-Noncommercial-1.0.0.md
+
+###########################################################################
+
+F. Publicly available and/or redistributable software
+These publicly available and/or redistributable software packages are provided without warranty of any kind and are redistributed under the terms of the respective licenses for each package. For more information, refer to the information below and the files in the licenses directory.
+
+#############
+
+AFNI 26.2.06: /usr/pubsw/packages/afni/AFNI_26.2.06/linux_rocky_8
+
+built from the source of tag AFNI_26.2.06, commit
+d202535f6bd424be64e14a2dd1db52ba831e7d76, https://github.com/afni/afni
+
+AFNI is a United States Government Work, in the public domain, with the
+exception of certain bundled third-party files, which carry their own terms.
+
+https://afni.nimh.nih.gov/Legal_info
+
+see: licenses/AFNI/LICENSE.txt
+     licenses/AFNI/README.copyright
+
+#############
+
+ANTs 2.6.5: /usr/pubsw/packages/ants/2.6.5/bin
+
+the programs antsApplyTransforms, antsRegistration,
+antsRegistrationSyNQuick.sh, CreateDisplacementField, ImageMath,
+N4BiasFieldCorrection and PrintHeader, from the release's Alma Linux 8 build
+(ants-2.6.5-almalinux8-X64-gcc.zip), https://github.com/ANTsX/ANTs
+
+ANTs is distributed under the Apache License, Version 2.0.
+
+https://www.apache.org/licenses/LICENSE-2.0
+
+see: licenses/ANTs/COPYING.txt (from the source of tag v2.6.5)
+
+#############
+
+Convert3D 1.1.0: /usr/pubsw/packages/c3d/1.1.0/bin
+
+the program c3d_affine_tool, from the binary package
+c3d-1.1.0-Linux-x86_64.tar.gz, https://sourceforge.net/projects/c3d
+(source: https://github.com/pyushkevich/c3d)
+
+Convert3D is free software under the GNU General Public License, version 3.
+Its source is available from https://github.com/pyushkevich/c3d.
+
+https://www.gnu.org/licenses/gpl-3.0.html
+
+see: licenses/Convert3D/COPYING.txt
+
+#############
+
+FreeSurfer 8.2.0: /usr/pubsw/packages/freesurfer/Rocky8-R820
+
+https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense
+
+NOTE: FreeSurfer users should obtain a free FreeSurfer license file
+    https://surfer.nmr.mgh.harvard.edu/registration.html
+and supply it at run time, bound into the container and named with
+--fs_license; it is not included in the image.
+
+see: licenses/FreeSurfer/ (the FreeSurfer software license agreement and
+     the licenses of the third-party software FreeSurfer includes)
+
+SynthStrip's pediatric model for brain masks without CSF,
+models/synthstrip.infant.1.pt (version 1), is not part of the FreeSurfer
+release; it is added from
+https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/requirements/synthstrip.infant.1.pt
+and used here under the MIT License, one of the two licenses (MIT or CC BY
+4.0) under which the SynthStrip page offers its weight files.
+
+https://opensource.org/licenses/MIT
+
+#############
+
+FSL 6.0.4: /usr/pubsw/packages/fsl/fsl-6.0.4-centos7
+
+https://fsl.fmrib.ox.ac.uk/fsl/docs/#/license
+
+No part of the Software may be reproduced, modified, transmitted or transferred in any form or by any means, electronic or mechanical, without the express permission of the University. The permission of the University is not required if the said reproduction, modification, transmission or transference is done without financial return, the conditions of this Licence are imposed upon the receiver of the product, and all original and amended source code is included in any transmitted product. You may be held legally responsible for any copyright infringement that is caused or encouraged by your failure to abide by these terms and conditions.
+
+see: licenses/FSL/LICENCE
+
+#############
+
+GNU Scientific Library 1.6: /usr/pubsw/packages/cmig_pipeline/lib/libgsl.so.0
+
+https://www.gnu.org/software/gsl/
+
+The GNU Scientific Library (GSL) is a numerical library for C and C++ programmers. It is free software under the GNU General Public License. Its source is included, in /usr/pubsw/packages/cmig_pipeline/lib/licenses/GSL/gsl-1.6.tar.gz.
+
+see: licenses/GSL/COPYING
+
+#############
+
+Intel C++ Compiler 10.1.013 and Math Kernel Library 10.0.2.018 runtime libraries:
+/usr/pubsw/packages/cmig_pipeline/lib (libguide.so, libimf.so, libintlc.so.5, libiomp5.so,
+libsvml.so, libmkl_*.so)
+
+redistributed runtime libraries, used by the programs in
+/usr/pubsw/packages/cmig_pipeline/bin
+
+www.intel.com/software/products
+
+see: licenses/Intel/ (clicense, clredist.txt, credist.txt, lgpltext,
+     mklEULA.txt, redist.txt)
+
+#############
+
+libg2c (GNU Fortran 77 runtime library): /usr/pubsw/packages/cmig_pipeline/lib/libg2c.so.0
+
+redistributed runtime library, used by the programs in
+/usr/pubsw/packages/cmig_pipeline/bin; part of the GNU Compiler Collection,
+under the GNU Lesser General Public License (COPYING.LIB), with the GNU
+General Public License (COPYING) it refers to.
+
+see: licenses/libg2c/ (COPYING, COPYING.LIB)
+
+#############
+
+MATLAB Runtime R2023a Update 4: /usr/pubsw/packages/matlab/R2023a
+
+https://www.mathworks.com/products/compiler/matlab-runtime.html
+
+The MATLAB Runtime is redistributed with the compiled app under the terms of
+the MATLAB Runtime license agreement.
+
+see: licenses/MATLAB_Runtime/matlabruntime_license_agreement.pdf
+
+#############
+
+MNI ICBM152 2009c nonlinear asymmetric atlases:
+/usr/pubsw/packages/synb0-disco/v3.1-5-gd813f94/atlases
+
+the T1 template and brain mask (mni_icbm152_t1_tal_nlin_asym_09c*), at 1 mm
+and 2.5 mm, as distributed with Synb0-DISCO
+
+Copyright (C) 1993-2004 Louis Collins, McConnell Brain Imaging Centre, Montreal Neurological Institute, McGill University.
+Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies. The authors and McGill University make no representations about the suitability of this software for any purpose. It is provided "as is" without express or implied warranty. The authors are not responsible for any data loss, equipment damage, property loss, or injury to subjects or patients resulting from the use or misuse of this software package.
+
+https://www.bic.mni.mcgill.ca/ServicesAtlases/ICBM152NLin2009
+
+see: licenses/MNI_ICBM152/COPYING
+
+#############
+
+Python 3.12 (the Rocky Linux python3.12 package) and the Python packages
+installed with it (numpy, scipy, pandas, nibabel, matplotlib, torch (CPU),
+torchvision (CPU), python-dateutil and the packages they require), at the
+versions pinned in the image's build (files/requirements.txt)
+
+https://www.python.org/psf/license/
+
+Each Python package is distributed under its own license (BSD, MIT,
+Apache-2.0, the PSF license and others; torch also carries the licenses of
+the third-party code it includes).
+
+see: licenses/python/ (the license files of each Python package, from its
+     installed dist-info, under the package's name and version)
+
+#############
+
+Rocky Linux 8.10: the base image, rockylinux/rockylinux:8.10
+
+https://rockylinux.org/licensing
+
+The Rocky Linux packages in the image are distributed under the terms of
+their own licenses, found under /usr/share/licenses and /usr/share/doc.
+
+#############
+
+Synb0-DISCO v3.1-5-gd813f94: /usr/pubsw/packages/synb0-disco/v3.1-5-gd813f94
+
+the scripts data_processing/prepare_input.sh and normalize_T1.sh,
+src/inference.py, model.py and util.py, the trained model weights
+(src/train_lin/*.pth) and the atlases, from commit
+d813f9435cffb5b663f15b52d55ed0a27181f0b2 of
+https://github.com/MASILab/Synb0-DISCO, with modifications (prepare_input.sh
+and normalize_T1.sh: N4 bias correction with --ants-n4, the T1 brain mask
+taken from the pipeline in place of bet; inference.py: inference on the
+CPU)
+
+The dwi step's bash/cmig_synb0_disco.sh (section B) is based on
+Synb0-DISCO's src/pipeline.sh from the same commit, with its paths changed
+to the image's (SYNB0_DISCO_DIR, the tools on the PATH).
+
+Copyright (c) 2025 Vanderbilt University
+Synb0-DISCO is distributed under the MIT License.
+
+https://opensource.org/licenses/MIT
+
+see: licenses/Synb0-DISCO/synb0-license-MIT.txt
+
+#############
+
+TORTOISE 4.3.0: /usr/pubsw/packages/tortoise/TORTOISEV4.3.0/bin, bin/DRTAMAS
+and settings
+
+the programs ApplyTransformationToScalar2, CombineDWIsWithBmatrix,
+CreateNonlinearityDisplacementMap, DisplacementFieldOperations,
+ExtractComponentFromDisplacementField, ExtractDWISubset, ExtractImage,
+FSLBVecsToTORTOISEBmatrix, IsDirectionPositiveDet, ReorientImage3D,
+SelectBestB0, SetFieldToIsocenter, SmoothTransitionHCPStructural,
+TORTOISEBmatrixToFSLBVecs, TORTOISEProcess and ZeroFieldDims, and the
+TORTOISE settings files, from release TORTOISEV4.3.0 of
+https://github.com/QMICodeBase/TORTOISEV4
+
+TORTOISE is free software under the GNU General Public License, version 3.
+Its source is available from https://github.com/QMICodeBase/TORTOISEV4.
+
+https://www.gnu.org/licenses/gpl-3.0.html
+
+The TORTOISE programs are statically linked. They include the library
+libbetokan.a, which the TORTOISE project builds from the source of FSL's bet
+(brain extraction tool) and distributes with TORTOISE; that code is FSL's,
+under the FSL licence (see FSL above, and licenses/FSL/LICENCE). They also
+include MPFIT (cmpfit 1.3a, derived from MINPACK-1) and JSON for Modern C++
+(nlohmann json, MIT License), whose notices are in licenses/TORTOISE.
+
+see: licenses/TORTOISE/LICENSE
+     licenses/TORTOISE/cmpfit-1.3a_DISCLAIMER
+     licenses/TORTOISE/json_nlohmann_LICENSE

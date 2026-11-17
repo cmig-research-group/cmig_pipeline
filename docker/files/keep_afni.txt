@@ -1,0 +1,17 @@
+# keep-list for afni, relative to /usr/pubsw/packages/afni/AFNI_26.2.06/linux_rocky_8
+# from the 10/26-27/2026 trace run 4 and the code check
+f 3dAFNItoNIFTI
+f 3dDeconvolve
+f 3dDespike
+f 3dFWHMx
+f 3dREMLfit
+f 3dTcat
+f 3dTshift
+f 3dTstat
+f 3dcalc
+f 3drefit
+f 3dvolreg
+f AFNI_atlas_spaces.niml
+f cjpeg
+f libf2c.so
+f libmri.so
