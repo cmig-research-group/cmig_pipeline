@@ -43,7 +43,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_fsurf(participant_id,session
 % Prev Mod: 08/12/2026 by Don Hagler
 % Prev Mod: 09/09/2026 by Don Hagler
 % Prev Mod: 10/12/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -64,7 +65,8 @@ end
 [parms,procflag] = check_output(parms);
 
 if procflag
-  [all_qcstruct,errcode,errmsg] = qc_fsurf(parms);
+  [all_qcstruct,errcode,tmp_errmsg] = qc_fsurf(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if ~errcode && ~isempty(all_qcstruct)
     fname_tsv = sprintf('%s/%s_desc-session_postqc.tsv',parms.outdir,parms.outstem);
     cmig_write_tabdat_postqc(all_qcstruct,fname_tsv,parms.forceflag);
@@ -73,8 +75,11 @@ end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-postqc',errcode,errmsg,parms.status_extra,startdate,procflag);
 
 outdir = parms.outdir;
@@ -174,6 +179,7 @@ function [all_qcstruct,errcode,errmsg] = qc_fsurf(parms)
     if tmp_errcode
       fprintf('%s: WARNING: input match check failed for %s_%s: %s\n',...
         mfilename,parms.participant_id,parms.session_id,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
 
@@ -181,6 +187,7 @@ function [all_qcstruct,errcode,errmsg] = qc_fsurf(parms)
   if tmp_errcode
     fprintf('%s: WARNING: topofix check failed for %s_%s: %s\n',...
       mfilename,parms.participant_id,parms.session_id,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   end
 
   all_qcstruct{1} = convert_fsurf_row(fsurf_qcinfo,parms.participant_id,parms.session_id);

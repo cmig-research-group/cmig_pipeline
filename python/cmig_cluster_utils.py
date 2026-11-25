@@ -6,22 +6,29 @@ and SGE clusters.
 Jobs are submitted with the same per-job sbatch/qsub lines as MMPS's qjobs
 (job name <batchname>_<job>, output in <batchdir>/pbsout, the job wrapper,
 e.g. qcshjob), all jobs for a cluster in one ssh call, and each job's id is
-read from its submit output. On SGE, no CPU count is requested (as in qjobs);
-on slurm, --cpus-per-task is.
+read from its submit output. On slurm, --cpus-per-task is requested. On
+SGE, a job with clustcpu > 1 asks for that many slots (-pe smp) and is bound
+to as many cores (-binding linear), with h_vmem (a per-slot consumable) at
+clustmem / clustcpu and mem_free (a host free-memory check) at clustmem; a
+1-CPU job is submitted as in qjobs. clustmem may differ from job to job (a
+retry at a higher memory limit). ssh never reads the caller's stdin.
 
 Job states from query_jobs are normalized to 'queued', 'running' or
 'other:<raw state>'.
 
 job_usage reads each job's memory, CPU and disk I/O from the scheduler's
-accounting (sacct on slurm, qacct on SGE), one ssh per cluster.
+accounting (sacct on slurm, qacct on SGE), one ssh per cluster, and whether
+the scheduler ended it for its memory (oom: slurm state OUT_OF_MEMORY, SGE
+exit_status 137).
 
 Created:  10/29/2026 by Don Hagler
-Prev mod: 10/29/2026 by Don Hagler
-Last mod: 11/04/2026 by Don Hagler
+Prev mod: 11/04/2026 by Don Hagler
+Last mod: 11/18/2026 by Don Hagler
 """
 
 import argparse
 import getpass
+import math
 import os
 import re
 import shlex
@@ -48,21 +55,27 @@ CLUSTER_SCHEDULERS = {'brightcluster1': 'slurm', 'mmilcluster8': 'sge',
 
 # job_usage fields, per job
 USAGE_FIELDS = ['elapsed_h', 'cpu_h', 'cores', 'mem_gb', 'mem_type',
-                'read_gb', 'write_gb', 'node', 'state', 'exit_status', 'failed']
+                'read_gb', 'write_gb', 'node', 'state', 'exit_status', 'failed',
+                'oom']
 SACCT_FIELDS = ['JobID', 'JobIDRaw', 'State', 'Elapsed', 'NodeList',
                 'TotalCPU', 'MaxRSS', 'MaxDiskRead', 'MaxDiskWrite']
 # sacct and qacct sizes are in multiples of 1024; GB here is 1024^3 bytes
 SIZE_UNITS = {'': 1.0, 'B': 1.0, 'K': 1024.0, 'M': 1024.0 ** 2,
               'G': 1024.0 ** 3, 'T': 1024.0 ** 4, 'P': 1024.0 ** 5}
 GB = 1024.0 ** 3
+# SGE memory units: upper case multiples of 1024, lower case of 1000
+SGE_MEM_UNITS = ['', 'K', 'M', 'G', 'T']
 
 
 def run_ssh(host, command, timeout=120):
     """Run command on host under its login shell (tcsh);
     return (returncode, stdout, stderr), with returncode None on timeout
-    or when ssh fails to start or to connect (ssh exit status 255)."""
+    or when ssh fails to start or to connect (ssh exit status 255). stdin
+    is /dev/null: ssh reading a terminal's stdin stops a background caller
+    (SIGTTIN)."""
     try:
         res = subprocess.run(['ssh'] + SSH_OPTIONS + [host, command],
+                             stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              universal_newlines=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -142,9 +155,50 @@ def count_jobs(jobs):
     return states.count('running'), states.count('queued')
 
 
+def sge_mem_per_slot(clustmem, nslots):
+    """clustmem (an SGE memory value: number and optional unit K, M, G or T,
+    upper case 1024-based, lower case 1000-based, none bytes) divided by
+    nslots, in the same unit when whole, else in the next smaller unit,
+    rounded up. Raises ValueError."""
+    m = re.match(r'^\s*([0-9]*\.?[0-9]+)\s*([kKmMgGtT]?)\s*$', str(clustmem))
+    if not m:
+        raise ValueError('invalid clustmem: {0}'.format(clustmem))
+    unit = m.group(2)
+    base = 1000 if unit.islower() else 1024
+    i = SGE_MEM_UNITS.index(unit.upper())
+    val = float(m.group(1)) / nslots
+    if abs(val - round(val)) > 1e-9 and i > 0:
+        val *= base
+        i -= 1
+    if abs(val - round(val)) < 1e-9:
+        val = round(val)
+    u = SGE_MEM_UNITS[i]
+    return '{0}{1}'.format(int(math.ceil(val)),
+                           u.lower() if unit.islower() else u)
+
+
+def scale_mem(clustmem, factor):
+    """clustmem (number and optional unit K, M, G or T, either case) times
+    factor, in the same unit, rounded up. Raises ValueError."""
+    m = re.match(r'^\s*([0-9]*\.?[0-9]+)\s*([kKmMgGtT]?)\s*$', str(clustmem))
+    if not m:
+        raise ValueError('invalid clustmem: {0}'.format(clustmem))
+    val = float(m.group(1)) * factor
+    if abs(val - round(val)) < 1e-9:
+        val = round(val)
+    return '{0}{1}'.format(int(math.ceil(val)), m.group(2))
+
+
 def submit_lines(scheduler, batchdir, job_names, clustmem, clustcpu=1,
                  cstr='qcshjob', batchname=None):
-    """The remote script lines that submit the jobs, as qjobs does."""
+    """The remote script lines that submit the jobs, as qjobs does; on SGE,
+    with clustcpu > 1, -pe smp and -binding linear for clustcpu slots and
+    h_vmem per slot (clustmem / clustcpu). clustmem: one value for all jobs,
+    or {job_name: value}. Raises ValueError."""
+    clustcpu = int(clustcpu or 1)
+    pe = ''
+    if scheduler == 'sge' and clustcpu > 1:
+        pe = ' -pe smp {0} -binding linear:{0}'.format(clustcpu)
     if not batchname:
         batchname = os.path.basename(os.path.normpath(batchdir))
     lines = ['cd {0}'.format(shlex.quote(batchdir)), 'mkdir -p pbsout']
@@ -153,15 +207,17 @@ def submit_lines(scheduler, batchdir, job_names, clustmem, clustcpu=1,
         out = 'pbsout/{0}.out'.format(job)
         err = 'pbsout/{0}.err'.format(job)
         wrap = 'echo "{0} {1} {2}"'.format(cstr, batchdir, job)
+        mem = clustmem.get(job) if isinstance(clustmem, dict) else clustmem
         if scheduler == 'slurm':
             sub = ('{0} | xargs -I {{}} sbatch --wrap="{{}}" --mem={1} '
                    '--job-name={2} --output={3} --error={4} --nodes=1 '
                    '--ntasks-per-node=1 --cpus-per-task={5}').format(
-                       wrap, clustmem, name, out, err, clustcpu)
+                       wrap, mem, name, out, err, clustcpu)
         elif scheduler == 'sge':
-            sub = ('{0} | qsub -V -hard -l mem_free={1},h_vmem={1} -cwd '
-                   '-N {2} -o {3} -e {4}').format(wrap, clustmem, name,
-                                                  out, err)
+            vmem = sge_mem_per_slot(mem, clustcpu) if pe else mem
+            sub = ('{0} | qsub -V -hard -l mem_free={1},h_vmem={2}{3} -cwd '
+                   '-N {4} -o {5} -e {6}').format(wrap, mem, vmem, pe,
+                                                  name, out, err)
         else:
             raise ValueError('unknown scheduler: {0}'.format(scheduler))
         lines += ['echo {0} {1}'.format(MARKER, job),
@@ -193,8 +249,9 @@ def parse_submit_output(out):
 
 def submit_jobs(cluster, scheduler, batchdir, job_names, clustmem, clustcpu=1,
                 cstr='qcshjob', batchname=None, dry_run=False):
-    """Submit batchdir/<job>.csh for each job in one ssh call; return
-    {job_name: jobid} for the jobs whose submit reported an id.
+    """Submit batchdir/<job>.csh for each job in one ssh call (clustmem: one
+    value, or {job_name: value}); return {job_name: jobid} for the jobs whose
+    submit reported an id.
     With dry_run, print the remote command and return {}."""
     if not job_names:
         return {}
@@ -283,11 +340,11 @@ def _gb(text):
 
 
 def _usage_record(elapsed, cpu, mem_gb, mem_type, read_gb, write_gb, node,
-                  state=None, exit_status=None, failed=None):
+                  state=None, exit_status=None, failed=None, oom=None):
     rec = dict.fromkeys(USAGE_FIELDS)
     rec.update({'mem_gb': mem_gb, 'mem_type': mem_type, 'read_gb': read_gb,
                 'write_gb': write_gb, 'node': node, 'state': state,
-                'exit_status': exit_status, 'failed': failed})
+                'exit_status': exit_status, 'failed': failed, 'oom': oom})
     if elapsed is not None:
         rec['elapsed_h'] = elapsed / 3600.0
     if cpu is not None:
@@ -321,11 +378,16 @@ def _slurm_usage(cluster, jobids):
         if job is None:
             continue
         batch = rows.get(job['JobIDRaw'] + '.batch', {})
+        # the job row or its .batch step may carry OUT_OF_MEMORY
+        oom = None
+        if any((s or '').startswith('OUT_OF_MEMORY')
+               for s in (job['State'], batch.get('State'))):
+            oom = 'slurm OUT_OF_MEMORY'
         usage[jobid] = _usage_record(
             _seconds(job['Elapsed']), _seconds(batch.get('TotalCPU')),
             _gb(batch.get('MaxRSS')), 'rss', _gb(batch.get('MaxDiskRead')),
             _gb(batch.get('MaxDiskWrite')), job['NodeList'],
-            state=job['State'])
+            state=job['State'], oom=oom)
     return usage
 
 
@@ -373,11 +435,15 @@ def _sge_usage(cluster, jobids):
             write_gb = int(rec.get('ru_oublock', '')) * 512 / GB
         except ValueError:
             write_gb = None
+        # 137: killed (SIGKILL), as when the job passes its h_vmem
+        exit_status = rec.get('exit_status')
+        oom = 'SGE exit_status 137' if (exit_status or '').split(' ')[0] == '137' \
+            else None
         usage[jobid] = _usage_record(
             _seconds(rec.get('ru_wallclock')), _seconds(rec.get('cpu')),
             _gb(rec.get('maxvmem')), 'vmem', None, write_gb,
-            rec.get('hostname'), exit_status=rec.get('exit_status'),
-            failed=rec.get('failed'))
+            rec.get('hostname'), exit_status=exit_status,
+            failed=rec.get('failed'), oom=oom)
     return usage
 
 
@@ -386,8 +452,10 @@ def job_usage(cluster, scheduler, jobids):
     when the head node does not answer or the query fails; jobs it does not
     know are absent. usage holds elapsed_h, cpu_h, cores (cpu / elapsed),
     mem_gb with mem_type ('rss', slurm MaxRSS; 'vmem', SGE maxvmem), read_gb
-    (slurm only), write_gb, node, and state (slurm) or exit_status and
-    failed (SGE); a value accounting does not give is None."""
+    (slurm only), write_gb, node, state (slurm) or exit_status and failed
+    (SGE), and oom (why the scheduler ended the job for its memory: 'slurm
+    OUT_OF_MEMORY' or 'SGE exit_status 137', else None); a value accounting
+    does not give is None."""
     jobids = sorted(set(str(j) for j in jobids if str(j).strip()))
     if not jobids:
         return {}
@@ -429,7 +497,8 @@ def parse_args():
     parser.add_argument('--clustmem', default='20G',
                         help='Memory per job (default: 20G)')
     parser.add_argument('--clustcpu', type=int, default=1,
-                        help='CPUs per job, slurm only (default: 1)')
+                        help='CPUs per job (SGE: slots, with -pe smp and '
+                             '-binding when > 1) (default: 1)')
     parser.add_argument('--cstr', default='qcshjob',
                         help='Job wrapper command (default: qcshjob)')
     parser.add_argument('--batchname', default=None,

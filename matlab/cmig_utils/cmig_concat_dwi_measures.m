@@ -38,7 +38,7 @@ function [outdir,errcode,errmsg] = cmig_concat_dwi_measures(participant_id,sessi
 % Output:
 %   outdir: output directory
 %   errcode: 0 if successful, 1 if error
-%   errmsg: error message string if errcode=1, otherwise []
+%   errmsg: error message string if errcode=1, or a warning, otherwise []
 %
 % Input MGZ naming (from mmil_gwcsurf_analysis; ico7 sphere maps):
 %   {tmpdir}/{meas}_{gwcsurf_outfix}_{layer}-sphere-{hemi}.mgz          (sphsmooth=0)
@@ -58,7 +58,8 @@ function [outdir,errcode,errmsg] = cmig_concat_dwi_measures(participant_id,sessi
 % Prev Mod: 08/28/2026 by Don Hagler
 % Prev Mod: 10/09/2026 by Don Hagler
 % Prev Mod: 10/22/2026 by Don Hagler
-% Last Mod: 11/11/2026 by Don Hagler
+% Prev Mod: 11/11/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -113,8 +114,8 @@ if exist(labelpath,'dir')
   verts_lh = fs_read_label(sprintf('%s/lh.cortex.label',labelpath));
   verts_rh = fs_read_label(sprintf('%s/rh.cortex.label',labelpath));
 else
-  fprintf('%s: WARNING: label path %s not found; skipping cortex masking\n',...
-    mfilename,labelpath);
+  errmsg = sprintf('label path %s not found; skipping cortex masking',labelpath);
+  fprintf('%s: WARNING: %s\n',mfilename,errmsg);
 end
 
 % dispatch on model
@@ -168,11 +169,21 @@ for m = 1:length(meas_list)
           fname = sprintf('%s_%s-sphere-sm%d-%s.mgz',gwc_outstem,layer,sphsm,hemi);
         end
         if ~exist(fname,'file')
-          fprintf('%s: WARNING: missing sphere file: %s\n',mfilename,fname);
-          continue;
+          errcode = 1;
+          errmsg = cmig_append_errmsg(errmsg,sprintf('missing sphere file %s',fname));
+          fprintf('%s: ERROR: missing sphere file %s\n',mfilename,fname);
+          return;
         end
         try
           vals = squeeze(fs_load_mgh(fname));
+        catch err
+          errcode = 1;
+          tmp_errmsg = sprintf('failed to load %s: %s',fname,err.message);
+          errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+          fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+          return;
+        end
+        try
           vals = vals(:);
           % set non-cortical vertices to zero
           switch hemi
@@ -206,7 +217,11 @@ for m = 1:length(meas_list)
           save(fname_out,'measmat','-v7');
           fprintf('%s: wrote %s\n',mfilename,fname_out);
         catch err
-          fprintf('%s: WARNING: failed to save %s: %s\n',mfilename,fname_out,err.message);
+          errcode = 1;
+          tmp_errmsg = sprintf('failed to save %s: %s',fname_out,err.message);
+          errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+          fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+          return;
         end
       end
     end

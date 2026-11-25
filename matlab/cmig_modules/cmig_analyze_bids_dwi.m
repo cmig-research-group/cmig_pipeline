@@ -134,7 +134,8 @@ function [outdir,errcode,errmsg] = cmig_analyze_bids_dwi(participant_id,session_
 % Prev Mod: 10/26/2026 by Don Hagler
 % Prev Mod: 11/06/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/12/2026 by Don Hagler
+% Prev Mod: 11/12/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -163,7 +164,7 @@ if procflag
   % load DWI data once for all model fits
   [vol_all,qmat_all,bvals_all,M,load_errcode,load_errmsg] = load_dwi_data(parms);
   if load_errcode
-    errcode = 1; errmsg = load_errmsg;
+    errcode = 1; errmsg = cmig_append_errmsg(errmsg,load_errmsg);
     cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate);
     return;
   end
@@ -172,7 +173,7 @@ if procflag
   %   aseg sampling and gwcsurf all use the same one
   [parms,reg_errcode,reg_errmsg] = reregister_to_T1(parms,vol_all,bvals_all,M);
   if reg_errcode
-    errcode = 1; errmsg = reg_errmsg;
+    errcode = 1; errmsg = cmig_append_errmsg(errmsg,reg_errmsg);
     cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate);
     return;
   end
@@ -186,7 +187,7 @@ if procflag
       mfilename,wmbc_errmsg);
     fprintf('%s: WARNING: falling back to uncorrected data\n',mfilename);
     vol_fit = vol_all;
-    errmsg = wmbc_errmsg;
+    errmsg = cmig_append_errmsg(errmsg,sprintf('white matter bias correction failed: %s',wmbc_errmsg));
   end
   parms.wmbc_applied_flag = ~wmbc_errcode && parms.wmbc_flag;
   % the non-normalized RSI measures are not meaningful on uncorrected data,
@@ -202,6 +203,7 @@ if procflag
   if mask_errcode
     fprintf('%s: WARNING: %s\n',mfilename,mask_errmsg);
     fprintf('%s: WARNING: no brain mask will be exported\n',mfilename);
+    errmsg = cmig_append_errmsg(errmsg,mask_errmsg);
   end
   % NOTE: an all-ones volmask fits every voxel: dti_fit_tensor and rsi_fit_MFOD
   %   fit only inside their (dilated) mask, and dilate_brain_mask leaves an
@@ -209,32 +211,30 @@ if procflag
   parms.fitmask = ones(size(vol_fit,1),size(vol_fit,2),size(vol_fit,3));
 
   % run DTI tensor fitting (full shell)
-  dti_errcode = 0; dti_errmsg = [];
+  dti_errcode = 0;
   if parms.dti_flag
     [dti_errcode,dti_errmsg] = calc_dti(parms,vol_fit,qmat_all,bvals_all,M,'dti');
     if dti_errcode
       fprintf('%s: WARNING: DTI fitting failed: %s\n',mfilename,dti_errmsg);
-      errmsg = dti_errmsg;
     end
+    errmsg = cmig_append_errmsg(errmsg,dti_errmsg);
   end
 
   % run inner-shell DTI tensor fitting
-  inner_dti_errcode = 0; inner_dti_errmsg = [];
+  inner_dti_errcode = 0;
   if parms.inner_dti_flag
     [inner_dti_errcode,inner_dti_errmsg] = calc_dti(parms,vol_fit,qmat_all,bvals_all,M,'dti_inner');
-    if inner_dti_errcode
-      errmsg = inner_dti_errmsg;
-    end
+    errmsg = cmig_append_errmsg(errmsg,inner_dti_errmsg);
   end
 
   % run RSI fitting
-  rsi_errcode = 0; rsi_errmsg = [];
+  rsi_errcode = 0;
   if parms.rsi_flag
     [rsi_errcode,rsi_errmsg] = calc_rsi(parms,vol_fit,qmat_all,bvals_all,M);
     if rsi_errcode
       fprintf('%s: WARNING: RSI fitting failed: %s\n',mfilename,rsi_errmsg);
-      errmsg = rsi_errmsg;
     end
+    errmsg = cmig_append_errmsg(errmsg,rsi_errmsg);
   end
   clear vol_fit;
 
@@ -242,7 +242,7 @@ if procflag
   if parms.dti_flag && parms.rsi_flag && dti_errcode && rsi_errcode
     if ~parms.inner_dti_flag || inner_dti_errcode
       errcode = 1;
-      errmsg = sprintf('DTI failed (%s) and RSI failed (%s)',dti_errmsg,rsi_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,'DTI and RSI failed');
       cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate);
       return;
     else
@@ -252,21 +252,21 @@ if procflag
 
   % run atlas fiber tracking (full-shell DTI only)
   if parms.fiber_flag && ~dti_errcode
-    atlas_track(parms);
+    errmsg = cmig_append_errmsg(errmsg,atlas_track(parms));
     % export fiber-derived volumes so they survive tmpdir cleanup
-    export_fseg(parms);
-    export_fiber_maps(parms);
+    errmsg = cmig_append_errmsg(errmsg,export_fseg(parms));
+    errmsg = cmig_append_errmsg(errmsg,export_fiber_maps(parms));
   end
 
   % extract ROI measures from model fits
   if ~dti_errcode
-    analyze_dwi_meas(parms,'dti');
+    errmsg = cmig_append_errmsg(errmsg,analyze_dwi_meas(parms,'dti'));
   end
   if parms.inner_dti_flag && ~inner_dti_errcode
-    analyze_dwi_meas(parms,'dti_inner');
+    errmsg = cmig_append_errmsg(errmsg,analyze_dwi_meas(parms,'dti_inner'));
   end
   if ~rsi_errcode
-    analyze_dwi_meas(parms,'rsi');
+    errmsg = cmig_append_errmsg(errmsg,analyze_dwi_meas(parms,'rsi'));
   end
 
   % gwcsurf analysis, sphere concat, and GIfTI conversion — per modality
@@ -276,27 +276,33 @@ if procflag
     if cov_errcode
       fprintf('%s: WARNING: %s\n',mfilename,cov_errmsg);
       fprintf('%s: WARNING: smoothing within the cortex label, ROIs not restricted to the coverage\n',mfilename);
-      errmsg = cov_errmsg;
     end
+    errmsg = cmig_append_errmsg(errmsg,cov_errmsg);
     if ~dti_errcode
-      analyze_gwcsurf(parms,'dti');
-      concat_dwi_measures(parms,'dti');
-      convert_dwi_measures(parms,'dti');
+      errmsg = cmig_append_errmsg(errmsg,analyze_gwcsurf(parms,'dti'));
+      [errcode,tmp_errmsg] = concat_dwi_measures(parms,'dti');
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+      if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
+      errmsg = cmig_append_errmsg(errmsg,convert_dwi_measures(parms,'dti'));
     end
     if parms.inner_dti_flag && ~inner_dti_errcode
-      analyze_gwcsurf(parms,'dti_inner');
-      concat_dwi_measures(parms,'dti_inner');
-      convert_dwi_measures(parms,'dti_inner');
+      errmsg = cmig_append_errmsg(errmsg,analyze_gwcsurf(parms,'dti_inner'));
+      [errcode,tmp_errmsg] = concat_dwi_measures(parms,'dti_inner');
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+      if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
+      errmsg = cmig_append_errmsg(errmsg,convert_dwi_measures(parms,'dti_inner'));
     end
     if ~rsi_errcode
-      analyze_gwcsurf(parms,'rsi');
-      concat_dwi_measures(parms,'rsi');
-      convert_dwi_measures(parms,'rsi');
+      errmsg = cmig_append_errmsg(errmsg,analyze_gwcsurf(parms,'rsi'));
+      [errcode,tmp_errmsg] = concat_dwi_measures(parms,'rsi');
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+      if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
+      errmsg = cmig_append_errmsg(errmsg,convert_dwi_measures(parms,'rsi'));
     end
   end
 
   % write BIDS TSV tabulated data
-  write_tabdat(parms);
+  errmsg = cmig_append_errmsg(errmsg,write_tabdat(parms));
 
   % write dmri motion QC tabulated data
   cmig_write_tabdat_dmri_motion('fnames_data',parms.fnames_data,...
@@ -307,7 +313,13 @@ if procflag
 end
 
 % cleanup tmpdirs
-if parms.cleanup_flag, errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir); end
+if parms.cleanup_flag
+  errmsg = cmig_append_errmsg(errmsg,cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir));
+end
+
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 
 % write status file
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate,procflag);
@@ -793,8 +805,8 @@ function [errcode,errmsg] = calc_dti(parms, vol_all, qmat_all, bvals_all, M, mod
     return;
   end
   % export the coefficients and the measure volumes to the BIDS output
-  export_coef(parms,DTfit,family);
-  export_meas(parms,fstem,get_dti_export_meas(),family);
+  errmsg = cmig_append_errmsg(errmsg,export_coef(parms,DTfit,family));
+  errmsg = cmig_append_errmsg(errmsg,export_meas(parms,fstem,get_dti_export_meas(),family));
   if dti_inner
     fprintf('%s: inner-shell DTI tensor fitting done\n',mfilename);
   else
@@ -1152,16 +1164,17 @@ function [errcode,errmsg] = calc_rsi(parms, vol_all, qmat_all, bvals_all, M)
     errcode = 1; errmsg = sprintf('rsi_convert_MFmeas failed: %s',err.message); return;
   end
   % export the coefficients and the measure volumes to the BIDS output
-  export_coef(parms,MFfit,'rsi');
-  export_meas(parms,parms.rsi_fstem,base_measlist,'rsi');
+  errmsg = cmig_append_errmsg(errmsg,export_coef(parms,MFfit,'rsi'));
+  errmsg = cmig_append_errmsg(errmsg,export_meas(parms,parms.rsi_fstem,base_measlist,'rsi'));
   % the restricted directional measure on the T1w grid, for manual QC
-  export_meas_resT1(parms,parms.rsi_fstem,'ND','rsi');
+  errmsg = cmig_append_errmsg(errmsg,export_meas_resT1(parms,parms.rsi_fstem,'ND','rsi'));
   fprintf('%s: RSI fitting done\n',mfilename);
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function atlas_track(parms)
+function errmsg = atlas_track(parms)
+  errmsg = [];
   fprintf('%s: running atlas fiber tracking...\n',mfilename);
   fname_FA = sprintf('%s_FA.mgz',parms.dt_fstem_full);
   fname_V0 = sprintf('%s_V0.mgz',parms.dt_fstem_full);
@@ -1170,11 +1183,15 @@ function atlas_track(parms)
   fname_T1 = sprintf('%s/%s_%s/mri/nu.mgz',...
     parms.fsurf_rootdir,parms.participant_id,parms.session_id);
   if ~exist(fname_FA,'file')
-    fprintf('%s: WARNING: FA file not found: %s; skipping atlas tracking\n',mfilename,fname_FA);
+    tmp_errmsg = sprintf('FA file not found: %s; skipping atlas tracking',fname_FA);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   if ~exist(fname_T1,'file')
-    fprintf('%s: WARNING: T1 file not found: %s; skipping atlas tracking\n',mfilename,fname_T1);
+    tmp_errmsg = sprintf('T1 file not found: %s; skipping atlas tracking',fname_T1);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   try
@@ -1190,7 +1207,9 @@ function atlas_track(parms)
       'create_paths_flag',0,...
       'forceflag',parms.forceflag);
   catch err
-    fprintf('%s: WARNING: dti_AtlasTrack failed: %s\n',mfilename,err.message);
+    tmp_errmsg = sprintf('dti_AtlasTrack failed: %s',err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   end
   % dti_AtlasTrack only writes the base fiber files (fiber_N_prob_countatlas);
   % create the xcg-masked, prob-thresholded variants
@@ -1201,8 +1220,9 @@ function atlas_track(parms)
     fname_aseg = sprintf('%s/%s_%s/mri/aseg.mgz',...
       parms.fsurf_rootdir,parms.participant_id,parms.session_id);
     if ~exist(fname_aseg,'file')
-      fprintf('%s: WARNING: aseg not found (%s); skipping xcg fiber masking\n',...
-        mfilename,fname_aseg);
+      tmp_errmsg = sprintf('aseg not found (%s); skipping xcg fiber masking',fname_aseg);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     else
       [M_T1,volsz_T1] = fs_read_header(fname_T1);
       volsz_T1 = volsz_T1(1:3);
@@ -1225,7 +1245,9 @@ function atlas_track(parms)
           'create_paths_flag',0,...
           'forceflag',parms.forceflag);
       catch err
-        fprintf('%s: WARNING: dti_transform_fibers failed: %s\n',mfilename,err.message);
+        tmp_errmsg = sprintf('dti_transform_fibers failed: %s',err.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     end
   end
@@ -1261,7 +1283,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_coef(parms,fit,family)
+function errmsg = export_coef(parms,fit,family)
+  errmsg = [];
   % export the model fit coefficients to the BIDS output as a multi-frame
   %   nii.gz, with a sidecar json describing the model and naming each frame
   % NOTE: nothing in the pipeline reads these back. The measures still come
@@ -1278,22 +1301,25 @@ function export_coef(parms,fit,family)
   fname_json = sprintf('%s/%s_%s.json',parms.outdir,parms.outstem,suffix);
   % the mask and the reference b=0 travel with the coefficients and serve both
   %   coefficient files, so they are written whether or not this one is current
-  export_coef_ref(parms,fit);
+  errmsg = cmig_append_errmsg(errmsg,export_coef_ref(parms,fit));
   if exist(fname_out,'file') && exist(fname_json,'file') && ~parms.forceflag
     return;
   end
   try
     cmig_write_nifti(single(vol),fname_out,fit.M);
   catch err
-    fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_out,err.message);
+    tmp_errmsg = sprintf('failed to write %s: %s',fname_out,err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
-  write_json(coef_info(parms,fit,family),fname_json);
+  errmsg = cmig_append_errmsg(errmsg,write_json(coef_info(parms,fit,family),fname_json));
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_coef_ref(parms,fit)
+function errmsg = export_coef_ref(parms,fit)
+  errmsg = [];
   % the brain mask and the average b=0 that the coefficients are read against
   % NOTE: separate files rather than extra frames, so each stays homogeneous:
   %   the mask is binary and the b=0 is intensity. One pair serves both
@@ -1312,7 +1338,9 @@ function export_coef_ref(parms,fit)
     try
       cmig_write_nifti(single(parms.volmask>0),fname_mask,fit.M);
     catch err
-      fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_mask,err.message);
+      tmp_errmsg = sprintf('failed to write %s: %s',fname_mask,err.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
   if exist(fname_mask,'file') && (~exist(json_name(fname_mask),'file') || parms.forceflag)
@@ -1320,21 +1348,23 @@ function export_coef_ref(parms,fit)
       proc_uris(parms),dwi_ref(parms));
     info.Type = 'Brain';
     info.SkullStripped = false;
-    write_json(info,json_name(fname_mask));
+    errmsg = cmig_append_errmsg(errmsg,write_json(info,json_name(fname_mask)));
   end
   fname_ref = sprintf('%s/%s_dwiref.nii.gz',parms.outdir,parms.outstem);
   if ~exist(fname_ref,'file') || parms.forceflag
     try
       cmig_write_nifti(single(fit.volb0),fname_ref,fit.M);
     catch err
-      fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_ref,err.message);
+      tmp_errmsg = sprintf('failed to write %s: %s',fname_ref,err.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
   if exist(fname_ref,'file') && (~exist(json_name(fname_ref),'file') || parms.forceflag)
     info = sidecar_info(sprintf('The %s, the reference image for the model fit coefficients',b0_desc(parms)),...
       proc_uris(parms),dwi_ref(parms));
     info.SkullStripped = false;
-    write_json(info,json_name(fname_ref));
+    errmsg = cmig_append_errmsg(errmsg,write_json(info,json_name(fname_ref)));
   end
 return;
 
@@ -1440,7 +1470,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_meas(parms,fstem,measlist,family,rsi_measlist)
+function errmsg = export_meas(parms,fstem,measlist,family,rsi_measlist)
+  errmsg = [];
   % export the voxelwise measure volumes to the BIDS output as nii.gz
   % NOTE: the measures otherwise exist only as mgz inside analyze_dwi, which
   %   cleanup_flag removes at the end of the run
@@ -1454,7 +1485,9 @@ function export_meas(parms,fstem,measlist,family,rsi_measlist)
     meas = measlist{m};
     fname_in = sprintf('%s_%s.mgz',fstem,meas);
     if ~exist(fname_in,'file')
-      fprintf('%s: WARNING: measure volume not found: %s\n',mfilename,fname_in);
+      tmp_errmsg = sprintf('measure volume not found: %s',fname_in);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     if rsi
@@ -1473,7 +1506,9 @@ function export_meas(parms,fstem,measlist,family,rsi_measlist)
     end
     [vol,M] = fs_load_mgh(fname_in);
     if isempty(vol)
-      fprintf('%s: WARNING: failed to load %s\n',mfilename,fname_in);
+      tmp_errmsg = sprintf('failed to load %s',fname_in);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     frame_names = meas_frame_names(meas,extmeas,size(vol,4),rsi,rsi_measlist);
@@ -1488,8 +1523,9 @@ function export_meas(parms,fstem,measlist,family,rsi_measlist)
           try
             cmig_write_nifti(single(vol(:,:,:,k)),fname_k,M);
           catch err
-            fprintf('%s: WARNING: failed to write %s: %s\n',...
-              mfilename,fname_k,err.message);
+            tmp_errmsg = sprintf('failed to write %s: %s',fname_k,err.message);
+            fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+            errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
             continue;
           end
         elseif exist(json_name(fname_k),'file')
@@ -1497,14 +1533,16 @@ function export_meas(parms,fstem,measlist,family,rsi_measlist)
         end
         info = sidecar_info(meas_description(parms,family,frame_names{k}),...
           {out_uri(parms,fname_coef)},dwi_ref(parms));
-        write_json(info,json_name(fname_k));
+        errmsg = cmig_append_errmsg(errmsg,write_json(info,json_name(fname_k)));
       end
       continue;
     end
     try
       cmig_write_nifti(single(vol),fname_out,M);
     catch err
-      fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_out,err.message);
+      tmp_errmsg = sprintf('failed to write %s: %s',fname_out,err.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     info = sidecar_info(meas_description(parms,family,extmeas),...
@@ -1513,13 +1551,14 @@ function export_meas(parms,fstem,measlist,family,rsi_measlist)
     if ~isempty(frame_names)
       info.FrameNames = frame_names;
     end
-    write_json(info,fname_json);
+    errmsg = cmig_append_errmsg(errmsg,write_json(info,fname_json));
   end
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_meas_resT1(parms,fstem,meas,family)
+function errmsg = export_meas_resT1(parms,fstem,meas,family)
+  errmsg = [];
   % export the first frame of a measure resampled to the T1w grid, as
   %   _space-T1w_<family><measure>.nii.gz, the review image of
   %   cmig_manual_postqc_bids beside the AtlasTrack dseg
@@ -1538,8 +1577,9 @@ function export_meas_resT1(parms,fstem,meas,family)
     return;
   end
   if ~exist(fname_in,'file') || ~exist(fname_T1,'file')
-    fprintf('%s: WARNING: %s or %s not found; no T1w-space %s%s\n',...
-      mfilename,fname_in,fname_T1,family,extmeas);
+    tmp_errmsg = sprintf('%s or %s not found; no T1w-space %s%s',fname_in,fname_T1,family,extmeas);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   try
@@ -1550,14 +1590,16 @@ function export_meas_resT1(parms,fstem,meas,family)
       'M_reg',parms.M_T1_to_DTI,'interpm',1);
     cmig_write_nifti(single(vol_res),fname_out,M_T1);
   catch err
-    fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_out,err.message);
+    tmp_errmsg = sprintf('failed to write %s: %s',fname_out,err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   fname_meas = sprintf('%s/%s_%s%s.nii.gz',parms.outdir,parms.outstem,family,extmeas);
   uri_T1 = fsurf_uri(parms,'mri/nu.mgz');
   info = sidecar_info(sprintf('%s, resampled to the FreeSurfer nu.mgz grid',...
     meas_description(parms,family,extmeas)),{out_uri(parms,fname_meas),uri_T1},uri_T1);
-  write_json(info,fname_json);
+  errmsg = cmig_append_errmsg(errmsg,write_json(info,fname_json));
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1590,7 +1632,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function write_json(info,fname)
+function errmsg = write_json(info,fname)
+  errmsg = [];
   % NOTE: PrettyPrint was added in R2021a (MATLAB 9.10); guarded so an
   %   older MATLAB writes a single line rather than failing
   if verLessThan('matlab','9.10')
@@ -1600,7 +1643,9 @@ function write_json(info,fname)
   end
   fid = fopen(fname,'wt');
   if fid<0
-    fprintf('%s: WARNING: failed to open %s for writing\n',mfilename,fname);
+    tmp_errmsg = sprintf('failed to open %s for writing',fname);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   fprintf(fid,'%s',json);
@@ -1766,14 +1811,17 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function strip_gii_metadata(fname)
+function errmsg = strip_gii_metadata(fname)
+  errmsg = [];
   % remove the UserName and Date metadata that mri_convert writes into a GIfTI
   str = fileread(fname);
   str = regexprep(str,...
     '\s*<MD>\s*<Name><!\[CDATA\[(UserName|Date)\]\]></Name>\s*<Value>.*?</Value>\s*</MD>','');
   fid = fopen(fname,'w');
   if fid<0
-    fprintf('%s: WARNING: failed to open %s for writing\n',mfilename,fname);
+    tmp_errmsg = sprintf('failed to open %s for writing',fname);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   fwrite(fid,str,'char');
@@ -1782,11 +1830,14 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_fseg(parms)
+function errmsg = export_fseg(parms)
+  errmsg = [];
   % export the fseg fiber segmentation volume to the BIDS output
   fname_fseg = sprintf('%s/fseg_resT1_xcg.mgz',parms.at_outdir);
   if ~exist(fname_fseg,'file')
-    fprintf('%s: WARNING: fseg volume not found: %s\n',mfilename,fname_fseg);
+    tmp_errmsg = sprintf('fseg volume not found: %s',fname_fseg);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   fname_out = sprintf('%s/%s_space-T1w_atlas-at_dseg.nii.gz',...
@@ -1799,7 +1850,9 @@ function export_fseg(parms)
   %   single, the type fs_save_mgh wrote
   [vol,M] = fs_load_mgh(fname_fseg);
   if isempty(vol)
-    fprintf('%s: WARNING: failed to load %s\n',mfilename,fname_fseg);
+    tmp_errmsg = sprintf('failed to load %s',fname_fseg);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   % renumber AtlasTrack's labels, 10000 + the fiber number, to the codes of
@@ -1810,7 +1863,9 @@ function export_fseg(parms)
   try
     cmig_write_nifti(single(vol),fname_out,M);
   catch err
-    fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_out,err.message);
+    tmp_errmsg = sprintf('failed to write %s: %s',fname_out,err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   uri_T1 = fsurf_uri(parms,'mri/nu.mgz');
@@ -1818,18 +1873,21 @@ function export_fseg(parms)
   info = sidecar_info(['AtlasTrack fiber tract segmentation on the FreeSurfer '...
     'nu.mgz grid, excluding CSF and gray matter; each label is 21000 plus the '...
     'fiber number, the codes of CMIG_ColorLUT.txt'],sources,uri_T1);
-  write_json(info,fname_json);
+  errmsg = cmig_append_errmsg(errmsg,write_json(info,fname_json));
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_fiber_maps(parms)
+function errmsg = export_fiber_maps(parms)
+  errmsg = [];
   % export the individual AtlasTrack fiber probability maps to the BIDS
   %   output as a single 4D volume at DTI resolution, with a sidecar json
   %   naming the fiber for each frame
   fiber_dir = sprintf('%s/fiber_maps',parms.at_outdir);
   if ~exist(fiber_dir,'dir')
-    fprintf('%s: WARNING: fiber maps directory not found: %s\n',mfilename,fiber_dir);
+    tmp_errmsg = sprintf('fiber maps directory not found: %s',fiber_dir);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   fname_out = sprintf('%s/%s_atlas-at_probseg.nii.gz',parms.outdir,parms.outstem);
@@ -1842,7 +1900,9 @@ function export_fiber_maps(parms)
   try
     FiberLegend = DTI_MMIL_Read_Fiber_Legend();
   catch err
-    fprintf('%s: WARNING: could not load fiber legend: %s\n',mfilename,err.message);
+    tmp_errmsg = sprintf('could not load fiber legend: %s',err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   end
   % load each fiber probability map and concatenate as frames
   vol_fibers = []; M = eye(4);
@@ -1851,7 +1911,9 @@ function export_fiber_maps(parms)
     fnum = parms.trans_fibers(f);
     fname_fiber = sprintf('%s/fiber_%d_prob_countatlas.mat',fiber_dir,fnum);
     if ~exist(fname_fiber,'file')
-      fprintf('%s: WARNING: fiber map not found: %s\n',mfilename,fname_fiber);
+      tmp_errmsg = sprintf('fiber map not found: %s',fname_fiber);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     [vol,M] = mmil_load_sparse(fname_fiber);
@@ -1860,7 +1922,9 @@ function export_fiber_maps(parms)
     fiber_names{end+1} = get_fiber_name(fnum,FiberLegend);
   end
   if isempty(vol_fibers)
-    fprintf('%s: WARNING: no fiber maps found in %s\n',mfilename,fiber_dir);
+    tmp_errmsg = sprintf('no fiber maps found in %s',fiber_dir);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   % save the 4D volume
@@ -1869,7 +1933,9 @@ function export_fiber_maps(parms)
   try
     cmig_write_nifti(vol_fibers,fname_out,M);
   catch err
-    fprintf('%s: WARNING: failed to write %s: %s\n',mfilename,fname_out,err.message);
+    tmp_errmsg = sprintf('failed to write %s: %s',fname_out,err.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     return;
   end
   % write sidecar json naming the fiber for each frame
@@ -1878,7 +1944,7 @@ function export_fiber_maps(parms)
   info.LabelMap = fiber_names;
   info.FiberNumbers = fiber_numbers;
   info.FiberNames = fiber_names;
-  write_json(info,fname_json);
+  errmsg = cmig_append_errmsg(errmsg,write_json(info,fname_json));
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1896,7 +1962,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function analyze_dwi_meas(parms, modality)
+function errmsg = analyze_dwi_meas(parms, modality)
+  errmsg = [];
   % modality: 'dti', 'dti_inner', or 'rsi'
   dti = strcmp(modality,'dti');
   dti_inner = strcmp(modality,'dti_inner');
@@ -1932,7 +1999,9 @@ function analyze_dwi_meas(parms, modality)
     end
     fname_meas = sprintf('%s_%s.mgz',fstem,base_meas);
     if ~exist(fname_meas,'file')
-      fprintf('%s: WARNING: %s measure file not found: %s\n',mfilename,upper(modality),fname_meas);
+      tmp_errmsg = sprintf('%s measure file not found: %s',upper(modality),fname_meas);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     % aseg ROI extraction
@@ -1970,15 +2039,17 @@ function analyze_dwi_meas(parms, modality)
             'disp_suffix',parms.aseg_disp_suffix,...
             'dispfact',parms.aseg_dispfact}];
         else
-          fprintf('%s: WARNING: inner-shell DTI MD not found (%s); aseg dispersion weighting disabled for %s %s\n',...
-            mfilename,fname_MD,upper(modality),meas);
+          tmp_errmsg = sprintf('inner-shell DTI MD not found (%s); aseg dispersion weighting disabled for %s %s',fname_MD,upper(modality),meas);
+          fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+          errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         end
       end
       try
         mmil_aseg_analysis(fname_meas,fspath,aseg_args{:});
       catch err
-        fprintf('%s: WARNING: mmil_aseg_analysis failed for %s %s: %s\n',...
-          mfilename,upper(modality),meas,err.message);
+        tmp_errmsg = sprintf('mmil_aseg_analysis failed for %s %s: %s',upper(modality),meas,err.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     end
     % fiber tract ROI extraction
@@ -2006,8 +2077,9 @@ function analyze_dwi_meas(parms, modality)
           'csv_flag',1,...
           'forceflag',parms.forceflag);
       catch err
-        fprintf('%s: WARNING: mmil_fiber_analysis failed for %s %s: %s\n',...
-          mfilename,upper(modality),meas,err.message);
+        tmp_errmsg = sprintf('mmil_fiber_analysis failed for %s %s: %s',upper(modality),meas,err.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     end
   end
@@ -2081,7 +2153,7 @@ function [parms,errcode,errmsg] = make_coverage(parms,vol_all,M)
         fname_mgz = sprintf('%s/coverage_ico7_mask-%s.mgz',parms.tmpdir,hemi);
         fs_save_mgh(single(covmask),fname_mgz);
         fs_mri_convert(fname_mgz,fname_out);
-        strip_gii_metadata(fname_out);
+        errmsg = cmig_append_errmsg(errmsg,strip_gii_metadata(fname_out));
         fprintf('%s: wrote %s\n',mfilename,fname_out);
       end
       if ~exist(json_name(fname_out),'file') || parms.forceflag
@@ -2092,12 +2164,12 @@ function [parms,errcode,errmsg] = make_coverage(parms,vol_all,M)
           ico_desc,parms.coverage_thresh),...
           [proc_uris(parms),surf_uris(parms,hemi)],ico_ref);
         info.Type = 'ROI';
-        write_json(info,json_name(fname_out));
+        errmsg = cmig_append_errmsg(errmsg,write_json(info,json_name(fname_out)));
       end
     end
   catch err
     errcode = 1;
-    errmsg = sprintf('coverage failed: %s',err.message);
+    errmsg = cmig_append_errmsg(errmsg,sprintf('coverage failed: %s',err.message));
     return;
   end
   parms.fnames_coverage_mask = fnames_mask;
@@ -2108,7 +2180,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function analyze_gwcsurf(parms, modality)
+function errmsg = analyze_gwcsurf(parms, modality)
+  errmsg = [];
   fprintf('%s: running gwcsurf analysis (%s)...\n',mfilename,modality);
   fspath = parms.fspath;
   % NOTE: applied whatever it is, including identity, so every step uses the one
@@ -2149,8 +2222,9 @@ function analyze_gwcsurf(parms, modality)
     end
     fname_meas = sprintf('%s_%s.mgz',fstem,base_meas);
     if ~exist(fname_meas,'file')
-      fprintf('%s: WARNING: %s measure file not found for gwcsurf: %s\n',...
-        mfilename,modality,fname_meas);
+      tmp_errmsg = sprintf('%s measure file not found for gwcsurf: %s',modality,fname_meas);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     gwc_outstem = sprintf('%s/%s_%s',parms.tmpdir,meas,gwcsurf_outfix);
@@ -2185,8 +2259,9 @@ function analyze_gwcsurf(parms, modality)
           'fnames_coverage_mask',parms.fnames_coverage_mask,...
           'forceflag',parms.forceflag);
       catch err
-        fprintf('%s: WARNING: mmil_gwcsurf_analysis failed for %s %s %s: %s\n',...
-          mfilename,modality,meas,aparc,err.message);
+        tmp_errmsg = sprintf('mmil_gwcsurf_analysis failed for %s %s %s: %s',modality,meas,aparc,err.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     end
   end
@@ -2195,7 +2270,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function convert_dwi_measures(parms, modality)
+function errmsg = convert_dwi_measures(parms, modality)
+  errmsg = [];
   % convert sphere-resampled dMRI surface maps from MGZ to GIfTI format
   fprintf('%s: converting dMRI surface maps to GIfTI (%s)...\n',mfilename,modality);
   layerlist = {'gm','wm','gwc'};
@@ -2241,7 +2317,9 @@ function convert_dwi_measures(parms, modality)
             fname = sprintf('%s_%s-sphere-sm%d-%s.mgz',gwc_outstem,layer,sphsm,hemi);
           end
           if ~exist(fname,'file')
-            fprintf('%s: WARNING: missing sphere file: %s\n',mfilename,fname);
+            tmp_errmsg = sprintf('missing sphere file: %s',fname);
+            fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+            errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
             continue;
           end
           fname_out = sprintf('%s/%s_hemi-%s_atlas-ico7_desc-fwhm%d_%s.func.gii',...
@@ -2263,11 +2341,12 @@ function convert_dwi_measures(parms, modality)
               fs_save_mgh(vals,fname,M);
             end
             fs_mri_convert(fname,fname_out);
-            strip_gii_metadata(fname_out);
+            errmsg = cmig_append_errmsg(errmsg,strip_gii_metadata(fname_out));
             fprintf('%s: wrote %s\n',mfilename,fname_out);
           catch err
-            fprintf('%s: WARNING: GIfTI conversion failed for %s: %s\n',...
-              mfilename,fname_out,err.message);
+            tmp_errmsg = sprintf('GIfTI conversion failed for %s: %s',fname_out,err.message);
+            fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+            errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
             continue;
           end
           fname_meas = sprintf('%s/%s_%s%s.nii.gz',...
@@ -2282,7 +2361,7 @@ function convert_dwi_measures(parms, modality)
             meas_description(parms,bids_prefix,bids_meas),layer_description(parms,layer),...
             ico_desc,fwhm_description(bids_fwhm,~isempty(parms.fnames_coverage_label))),...
             sources,ico_ref);
-          write_json(info,fname_json);
+          errmsg = cmig_append_errmsg(errmsg,write_json(info,fname_json));
         end
       end
     end
@@ -2292,7 +2371,14 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function concat_dwi_measures(parms, modality)
+function [errcode,errmsg] = concat_dwi_measures(parms, modality)
+  errcode = 0; errmsg = [];
+  % the concat reads the ico7 sphere maps, which gwcsurf writes only with
+  %   sphere_flag
+  if ~parms.sphere_flag
+    fprintf('%s: skipping surface map concat (%s): sphere_flag = 0\n',mfilename,modality);
+    return;
+  end
   args = {'dt_measlist_full',parms.dt_measlist_full,...
           'rsi_measlist',parms.rsi_measlist,...
           'gwcsurf_outfix',parms.gwcsurf_outfix,...
@@ -2301,13 +2387,14 @@ function concat_dwi_measures(parms, modality)
           'sphsmoothsteps',parms.sphsmoothsteps,...
           'fnames_coverage_label',parms.fnames_coverage_label,...
           'forceflag',parms.forceflag};
-  cmig_concat_dwi_measures(parms.participant_id,parms.session_id,...
+  [~,errcode,errmsg] = cmig_concat_dwi_measures(parms.participant_id,parms.session_id,...
     parms.output_rootdir,modality,args{:});
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function write_tabdat(parms)
+function errmsg = write_tabdat(parms)
+  errmsg = [];
   fprintf('%s: writing tabulated data...\n',mfilename);
   mmil_mkdir(parms.outdir);
 
@@ -2335,7 +2422,9 @@ function write_tabdat(parms)
     try
       FiberLegend = DTI_MMIL_Read_Fiber_Legend();
     catch err
-      fprintf('%s: WARNING: could not load fiber legend: %s\n',mfilename,err.message);
+      tmp_errmsg = sprintf('could not load fiber legend: %s',err.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
 

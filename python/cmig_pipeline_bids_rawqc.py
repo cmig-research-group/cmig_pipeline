@@ -4,8 +4,9 @@ Pipeline: run raw QC for all modalities (anat, func, dwi, fmap).
 
 Unlike other pipelines, each modality runs independently — a failure in one
 does not prevent the others from running. An overall status file is written
-at {output_rootdir}/{pid}/{sid}/{pid}_{sid}_desc-rawqc_status.tsv, the file
-cmig_mkjobs_bids_pipeline.py checks for this pipeline. With --pc_flag 1,
+at {output_rootdir}/{pid}/{sid}/{pid}_{sid}_desc-rawqc_status.tsv, with
+errcode 1 where any modality, pc or pcqc failed;
+cmig_mkjobs_bids_pipeline.py checks it after the per-modality status files. With --pc_flag 1,
 protocol compliance is written into --pc_rootdir (default: output_rootdir).
 
 Created:  06/11/2026 by Don Hagler
@@ -20,7 +21,8 @@ Prev mod: 10/26/2026 by Don Hagler
 Prev mod: 10/29/2026 by Don Hagler
 Prev mod: 11/06/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
-Last mod: 11/12/2026 by Don Hagler
+Prev mod: 11/12/2026 by Don Hagler
+Last mod: 11/20/2026 by Don Hagler
 """
 
 import argparse
@@ -209,14 +211,13 @@ def run(args):
         if em:
             errmsg_parts.append('{}: {}'.format(label, em))
 
-    # fail if pc or pcqc failed or all rawqc modalities failed; succeed if any
-    # rawqc modality ok
+    # fail if pc, pcqc or any rawqc modality failed (every modality has run)
     pc_failed = args.pc_flag and 'pc' in results and results['pc'][0] != 0
     pcqc_failed = (args.pc_flag and 'pcqc' in results and
                    results['pcqc'][0] != 0)
-    rawqc_attempted = {k: v for k, v in results.items() if k in MODALITIES}
-    all_rawqc_failed = bool(rawqc_attempted) and all(ec != 0 for ec, _ in rawqc_attempted.values())
-    combined_errcode = 1 if (pc_failed or pcqc_failed or all_rawqc_failed) else 0
+    any_rawqc_failed = any(ec != 0 for k, (ec, _) in results.items()
+                           if k in MODALITIES)
+    combined_errcode = 1 if (pc_failed or pcqc_failed or any_rawqc_failed) else 0
 
     combined_errmsg = '; '.join(errmsg_parts) if errmsg_parts else None
 

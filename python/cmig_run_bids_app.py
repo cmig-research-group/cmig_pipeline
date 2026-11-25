@@ -16,7 +16,8 @@ participant level: for each session, the rawqc pipeline
   which runs even if rawqc failed; the session fails if either fails. With
   --module NAME, that module or pipeline alone.
 group level: cmig_compile_bids_tabdat (the tabulated data of the rawqc,
-  analysis and postqc roots, into --tabulated_dir), then
+  analysis and postqc roots and the manual QC roots, into --tabulated_dir),
+  then
   cmig_concat_bids_sessions for each datatype (the analysis root, into
   --concat_dir); a datatype with no data is skipped with a warning unless
   named with --datatype. Both run with --forceflag 1 unless --forceflag 0 is
@@ -41,9 +42,14 @@ a step writes as its --output_rootdir); bids_dir is every step's
 --raw_rootdir. A root a step only reads is passed only where it exists,
 unless the step requires it; a root given that is only read must exist.
 Protocol compliance (cmig_pc_bids_abcd) writes into --pc_rootdir, default
-the rawqc root. dataset_description.json is written into each per-session
-output root the run writes (where absent; not into the group roots
-tabulated and concatenated), and the ABCD T1 atlas into the proc root.
+the rawqc root. The manual QC roots, --manual_rawqc_dir and
+--manual_postqc_dir (default output_dir/cmig_manual_rawqc and
+output_dir/cmig_manual_postqc), are read only by the group level's
+cmig_compile_bids_tabdat, as further roots of tabulated data, where they
+exist. dataset_description.json is written into each per-session output
+root the run writes (where absent; not into the group roots tabulated and
+concatenated, nor the manual QC roots), and the ABCD T1 atlas into the proc
+root.
 
 Step options: every option run.py does not take itself is passed to each
 step to be run whose parser accepts it (run.py --module NAME -h lists
@@ -57,6 +63,11 @@ set by run.py and cannot be given. A value that begins with - is given as
 container can see (bind it in); else FS_LICENSE. The participant level
 stops before anything runs if neither names a readable file. --work_dir
 sets SCRATCHROOT and MCR_CACHE_ROOT (work_dir/mcr_cache) for every step.
+Without it, each of the two that is unset or /tmp (the image's default)
+is set per account, SCRATCHROOT=/tmp/cmig_<user> and
+MCR_CACHE_ROOT=/tmp/cmig_<user>/mcr_cache, so that accounts sharing a host
+/tmp do not share one MATLAB Runtime cache; one set elsewhere (e.g. by a
+SINGULARITYENV_ variable) is kept.
 
 Versions: every status file records the image tag (CMIG_IMAGE_TAG) as
 app_version, CMIG_IMAGE_SHA256 (the .sif's sha256, which mkjobs and the
@@ -71,7 +82,8 @@ Prev mod: 10/07/2026 by Don Hagler
 Prev mod: 10/13/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
 Prev mod: 11/12/2026 by Don Hagler
-Last mod: 11/13/2026 by Don Hagler
+Prev mod: 11/13/2026 by Don Hagler
+Last mod: 11/18/2026 by Don Hagler
 """
 
 import argparse
@@ -80,6 +92,7 @@ import importlib
 import glob
 import json
 import os
+import pwd
 import re
 import shutil
 import signal
@@ -116,8 +129,15 @@ SESSION_ROOTS = ['rawqc_rootdir', 'proc_rootdir', 'fsurf_rootdir',
 DD_ROOTS = SESSION_ROOTS + ['pc_rootdir']
 # root labels, for the validator reports and the Name fallback
 ROOT_LABELS = dict(ROOTS, pc_rootdir='cmig_pc')
+# the manual QC roots, read only by the group level's tabdat compile, and
+#   their default subdirectories of output_dir
+MANUAL_ROOTS = [('manual_rawqc_dir', 'cmig_manual_rawqc'),
+                ('manual_postqc_dir', 'cmig_manual_postqc')]
 # the roots of the per-session tabulated data the group level compiles
-TABDAT_ROOTS = ['rawqc_rootdir', 'analysis_rootdir', 'postqc_rootdir']
+TABDAT_ROOTS = ['rawqc_rootdir', 'analysis_rootdir', 'postqc_rootdir'] + \
+    [k for k, _ in MANUAL_ROOTS]
+# the image's SCRATCHROOT and MCR_CACHE_ROOT, replaced per account
+DEFAULT_TMP = '/tmp'
 
 # the root each step writes, by step (a rawqc alias resolves to
 #   cmig_rawqc_bids); a pipeline missing here writes several, by name
@@ -245,6 +265,12 @@ def build_parser():
                            help='(default: output_dir/{0})'.format(sub))
     roots.add_argument('--pc_rootdir', default=None,
                        help='protocol compliance (default: the rawqc root)')
+    manual = parser.add_argument_group(
+        'manual QC roots (group level, read by ' + TABDAT + ' where they '
+        'exist; one given must exist)')
+    for key, sub in MANUAL_ROOTS:
+        manual.add_argument('--' + key, default=None,
+                            help='(default: output_dir/{0})'.format(sub))
     other = parser.add_argument_group('other')
     other.add_argument('--fs_license', default=None,
                        help='FreeSurfer license file, set as FS_LICENSE '
@@ -253,7 +279,10 @@ def build_parser():
     other.add_argument('--work_dir', default=None,
                        help='temporary files: sets SCRATCHROOT=DIR and '
                             'MCR_CACHE_ROOT=DIR/mcr_cache for every step, '
-                            'created if missing (default: the image\'s, /tmp)')
+                            'created if missing (default: per account, '
+                            '/tmp/cmig_<user> and /tmp/cmig_<user>/mcr_cache, '
+                            'for each that is unset or the image\'s /tmp; '
+                            'one set elsewhere is kept)')
     other.add_argument('--skip_bids_validator', action='store_true',
                        help='accepted and ignored: the validator runs only '
                             'as the group-level --module ' + VALIDATOR)
@@ -681,8 +710,8 @@ def group_jobs(args, roots, groups, names, given_roots):
     force = {} if 'forceflag' in given else {'forceflag': 1}
     if TABDAT in names and labels and not any(
             selected_sessions(roots[k], pids, sids) for k in TABDAT_ROOTS):
-        sys.exit('Error: no selected sessions in {0}, {1} or {2}'.format(
-            *[roots[k] for k in TABDAT_ROOTS]))
+        sys.exit('Error: no selected sessions in {0}'.format(
+            ', '.join(roots[k] for k in TABDAT_ROOTS)))
     steps = []
     if TABDAT in names:
         p = parsers[TABDAT]
@@ -799,8 +828,13 @@ def print_dry(jobs, level, roots):
                 print('  {0} {1}'.format(step[0], ' '.join(step[1])))
     print('{0} {1}, roots:'.format(len(jobs), 'sessions' if level == 'participant'
                                     else 'group run'))
-    for key in [k for k, _ in ROOTS] + ['pc_rootdir']:
+    keys = [k for k, _ in ROOTS] + ['pc_rootdir']
+    if level == 'group':
+        keys += [k for k, _ in MANUAL_ROOTS]
+    for key in keys:
         print('  --{0} {1}'.format(key, roots[key]))
+    for var in ['SCRATCHROOT', 'MCR_CACHE_ROOT']:
+        print('  {0}={1}'.format(var, os.environ.get(var, '')))
 
 
 def check_fs_license(fs_license, level):
@@ -818,14 +852,38 @@ def check_fs_license(fs_license, level):
         os.environ['FS_LICENSE'] = os.path.abspath(lic)
 
 
+def account_name():
+    """The account's name (USER is often unset under singularity
+    --cleanenv), else its numeric uid."""
+    try:
+        return pwd.getpwuid(os.getuid()).pw_name
+    except KeyError:
+        return str(os.getuid())
+
+
 def set_work_dir(work_dir, dry_flag):
     """SCRATCHROOT and MCR_CACHE_ROOT for every step, created (not with
-    dry_flag)."""
-    work_dir = os.path.abspath(work_dir)
-    os.environ['SCRATCHROOT'] = work_dir
-    os.environ['MCR_CACHE_ROOT'] = os.path.join(work_dir, 'mcr_cache')
-    if not dry_flag:
-        os.makedirs(os.environ['MCR_CACHE_ROOT'], exist_ok=True)
+    dry_flag): under work_dir; without it, per account under /tmp, each
+    that is unset or /tmp (a host /tmp bound in is shared by every account,
+    and the first one's MATLAB Runtime cache blocks the others); return
+    {variable: directory} of those set."""
+    if work_dir:
+        work_dir = os.path.abspath(work_dir)
+        dirs = {'SCRATCHROOT': work_dir,
+                'MCR_CACHE_ROOT': os.path.join(work_dir, 'mcr_cache')}
+    else:
+        base = os.path.join(DEFAULT_TMP, 'cmig_' + account_name())
+        dirs = {}
+        for var, d in [('SCRATCHROOT', base),
+                       ('MCR_CACHE_ROOT', os.path.join(base, 'mcr_cache'))]:
+            val = os.environ.get(var)
+            if not val or os.path.normpath(val) == DEFAULT_TMP:
+                dirs[var] = d
+    for var, d in dirs.items():
+        os.environ[var] = d
+        if not dry_flag:
+            os.makedirs(d, exist_ok=True)
+    return dirs
 
 
 def run_jobs(jobs):
@@ -906,6 +964,11 @@ def main():
         if val:
             given_roots.add(key)
         roots[key] = os.path.abspath(val) if val else os.path.join(args.output_dir, sub)
+    for key, sub in MANUAL_ROOTS:
+        val = getattr(args, key)
+        if val:
+            given_roots.add(key)
+        roots[key] = os.path.abspath(val) if val else os.path.join(args.output_dir, sub)
     if args.pc_rootdir:
         given_roots.add('pc_rootdir')
     roots['pc_rootdir'] = (os.path.abspath(args.pc_rootdir) if args.pc_rootdir
@@ -914,6 +977,9 @@ def main():
     level = args.analysis_level
     if args.datatype and level != 'group':
         sys.exit('Error: --datatype is a group-level option')
+    for key, _ in MANUAL_ROOTS:
+        if key in given_roots and level != 'group':
+            sys.exit('Error: --{0} is a group-level option'.format(key))
     if args.module:
         names = [check_module(args.module, level)]
     elif level == 'participant':
@@ -924,8 +990,7 @@ def main():
         check_session_level(args.bids_dir)
     # fail now, not hours later at the first FreeSurfer tool
     check_fs_license(args.fs_license, level)
-    if args.work_dir:
-        set_work_dir(args.work_dir, args.dry_flag)
+    set_work_dir(args.work_dir, args.dry_flag)
 
     groups = option_groups(rest)
     if level == 'participant':

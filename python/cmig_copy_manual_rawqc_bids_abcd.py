@@ -2,13 +2,18 @@
 """
 Copy ABCD manual raw QC scores from DAIC merged QC csv to BIDS derivatives.
 
+--session_file limits the sessions copied to those listed in a csv or tsv file
+with participant_id and session_id columns (e.g. sub-XXXXXXXX, ses-00A); it
+applies in addition to --participant_id and --session_id.
+
 Created:  08/13/2026 by Don Hagler
 Prev mod: 08/13/2026 by Don Hagler
 Prev mod: 08/21/2026 by Don Hagler
 Prev mod: 09/22/2026 by Don Hagler
 Prev mod: 11/06/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
-Last mod: 11/12/2026 by Don Hagler
+Prev mod: 11/12/2026 by Don Hagler
+Last mod: 11/18/2026 by Don Hagler
 """
 
 import argparse
@@ -408,8 +413,29 @@ def load_qcinfo(fname, pguid_filter=None, verbose=0):
 # enumerate scans from rawdata scans.tsv (TODO 1b)
 #############################################################################
 
+def read_session_file(fname):
+    # read a participant_id,session_id list (csv or tsv, delimiter taken from
+    # the header line); return a set of (pid, sid), ids used as given
+    with open(fname, newline='') as f:
+        header = f.readline()
+        delim = '\t' if '\t' in header else ','
+        f.seek(0)
+        reader = csv.DictReader(f, delimiter=delim)
+        fields = [c.strip() for c in (reader.fieldnames or [])]
+        if 'participant_id' not in fields or 'session_id' not in fields:
+            return None
+        reader.fieldnames = fields
+        sess_filter = set()
+        for row in reader:
+            pid = (row.get('participant_id') or '').strip()
+            sid = (row.get('session_id') or '').strip()
+            if pid and sid:
+                sess_filter.add((pid, sid))
+    return sess_filter
+
+
 def get_sessions(raw_rootdir, qc_sessions, participant_id=None,
-                 session_id=None, verbose=0):
+                 session_id=None, sess_filter=None, verbose=0):
     # build the session list from the csv sessions that have manual QC,
     # constructing each scans.tsv path directly
     # globbing the rawdata tree (~12k subject dirs) is far slower and
@@ -427,6 +453,8 @@ def get_sessions(raw_rootdir, qc_sessions, participant_id=None,
         if pid_filter is not None and pid not in pid_filter:
             continue
         if session_id is not None and sid != session_id:
+            continue
+        if sess_filter is not None and (pid, sid) not in sess_filter:
             continue
         fpath = os.path.join(raw_rootdir, pid, sid,
                              '{0}_{1}_scans.tsv'.format(pid, sid))
@@ -905,6 +933,10 @@ def parse_args():
                              'ids (e.g. sub-XXXXXXXX)')
     parser.add_argument('--session_id', default=None,
                         help='optional session filter (e.g. ses-00A)')
+    parser.add_argument('--session_file', default=None,
+                        help='optional csv or tsv file with participant_id '
+                             'and session_id columns; only the sessions '
+                             'listed are copied')
     parser.add_argument('--verbose', type=int, default=0, choices=[0, 1],
                         help='display status messages')
     parser.add_argument('--forceflag', type=int, default=0, choices=[0, 1],
@@ -922,6 +954,21 @@ def run(args):
             APPNAME, args.qcinfo_file))
         return 1
 
+    # read the session list, if given
+    sess_filter = None
+    if args.session_file:
+        if not os.path.isfile(args.session_file):
+            print('{0}: ERROR: session_file {1} not found'.format(
+                APPNAME, args.session_file))
+            return 1
+        sess_filter = read_session_file(args.session_file)
+        if sess_filter is None:
+            print('{0}: ERROR: session_file {1} has no participant_id and '
+                  'session_id columns'.format(APPNAME, args.session_file))
+            return 1
+        print('{0}: {1} sessions listed in {2}'.format(
+            APPNAME, len(sess_filter), args.session_file))
+
     # load csv once; filter rows if participant filter given
     pguid_filter = None
     if args.participant_id:
@@ -934,7 +981,7 @@ def run(args):
     # enumerate sessions from the csv, checking rawdata for scans.tsv
     sessions = get_sessions(args.raw_rootdir, qc_sessions,
                             args.participant_id, args.session_id,
-                            args.verbose)
+                            sess_filter, args.verbose)
     if not sessions:
         print('{0}: ERROR: no sessions with manual QC and a scans.tsv '
               'found in {1}'.format(APPNAME, args.raw_rootdir))

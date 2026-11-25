@@ -45,7 +45,8 @@ function [outdir,errcode,errmsg] = cmig_analyze_bids_anat(participant_id,session
 % Prev Mod: 10/26/2026 by Don Hagler
 % Prev Mod: 11/06/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/12/2026 by Don Hagler
+% Prev Mod: 11/12/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -91,14 +92,16 @@ if procflag
   end
 
   % surface smoothing and ROI averages for sMRI measures
-  [errcode,errmsg] = analyze_smri(parms);
+  [errcode,tmp_errmsg] = analyze_smri(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
 
   % resample surfaces to ico
   errcode_surf = cmig_resamp_surfs(parms.fspath,parms.tmpdir,parms.forceflag);
   if errcode_surf
-    errmsg = 'failed to resample surfaces';
-    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+    tmp_errmsg = 'failed to resample surfaces';
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   end
 
   % save vol_info
@@ -109,18 +112,20 @@ if procflag
     'fname_tag',sprintf('atlas-ico%d',parms.ico_order),'forceflag',parms.forceflag);
 
   % save sMRI measures in GIfTI format
-  [errcode,errmsg] = convert_smri_measures(parms);
+  [errcode,tmp_errmsg] = convert_smri_measures(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
 
   % save sMRI measures in concatenated data format
   % NOTE: measlist is entirely surface-derived, so skip for a volume-only
   %   recon; the function treats a missing input file as fatal
   if parms.fs_complete_flag
-    [~,errcode,errmsg] = cmig_concat_smri_measures(parms.participant_id,parms.session_id,...
+    [~,errcode,tmp_errmsg] = cmig_concat_smri_measures(parms.participant_id,parms.session_id,...
       parms.output_rootdir,'fname_info',parms.fname_info,...
       'measlist',parms.measlist,'smoothlist',parms.smoothlist,...
       'hemilist',parms.hemilist,'ico_order',parms.ico_order,...
       'forceflag',parms.forceflag);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
   else
     fprintf('%s: WARNING: skipping sMRI measure concatenation (volume-only FreeSurfer recon)\n',mfilename);
@@ -128,10 +133,11 @@ if procflag
 
   % save sMRI surfaces in concatenated data format
   if ~errcode_surf
-    [~,errcode,errmsg] = cmig_concat_smri_surfaces(parms.participant_id,parms.session_id,...
+    [~,errcode,tmp_errmsg] = cmig_concat_smri_surfaces(parms.participant_id,parms.session_id,...
       parms.output_rootdir,'fname_info',parms.fname_info,...
       'surflist',parms.surflist,'hemilist',parms.hemilist,...
       'ico_order',parms.ico_order,'forceflag',parms.forceflag);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate); return; end
   end
 
@@ -140,7 +146,9 @@ if procflag
 end
 
 % cleanup tmpdirs
-if parms.cleanup_flag, errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir); end
+if parms.cleanup_flag
+  errmsg = cmig_append_errmsg(errmsg,cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir));
+end
 
 % write status file
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-analyze',errcode,errmsg,parms.status_extra,startdate,procflag);
@@ -405,12 +413,15 @@ function [errcode,errmsg] = convert_smri_measures(parms)
             fname = sprintf('%s/%s-sphere-%s-%s.mgz',parms.tmpdir,fullmeas,smoothstrin,hemi);
           end
           if ~exist(fname,'file')
-            fprintf('%s: WARNING: missing file %s\n',mfilename,fname);
+            tmp_errmsg = sprintf('missing file %s',fname);
+            fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+            errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
             continue;
           end
           % convert mgz to gii
           fs_mri_convert(fname,fname_out);
-          [errcode,errmsg] = strip_gii_metadata(fname_out);
+          [errcode,tmp_errmsg] = strip_gii_metadata(fname_out);
+          errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
           if errcode, return; end
           fprintf('%s: wrote file %s\n',mfilename,fname_out);
         end
@@ -418,7 +429,8 @@ function [errcode,errmsg] = convert_smri_measures(parms)
         fname_json = json_name(fname_out);
         if ~exist(fname_json,'file') || parms.forceflag
           info = gii_sidecar_info(parms,parms.measlist{measi},hemi,bids_fwhm_gii);
-          [errcode,errmsg] = write_json(info,fname_json);
+          [errcode,tmp_errmsg] = write_json(info,fname_json);
+          errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
           if errcode, return; end
         end
       end

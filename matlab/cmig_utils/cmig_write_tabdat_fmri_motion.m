@@ -27,6 +27,10 @@ function cmig_write_tabdat_fmri_motion(varargin)
 %   'dofvec_run': per-run dof, in place of the one in the roi_corrmat file
 %     one value per run of the roi_corrmat file; NaN for a run with none
 %     {default = []}
+%   'deconv_meanfd': session mean framewise displacement over the frames
+%     the deconvolution kept; written for a task only, when given
+%     single-subject mode only
+%     {default = []}
 %   'forceflag': [0|1] whether to overwrite existing output
 %     {default = 0}
 %
@@ -36,7 +40,8 @@ function cmig_write_tabdat_fmri_motion(varargin)
 % Prev Mod: 09/24/2026 by Don Hagler
 % Prev Mod: 10/03/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Last Mod: 11/22/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -53,6 +58,7 @@ parms = mmil_args2parms(varargin,{...
   'session_id',[],[],...
   'dofvec',[],[],...
   'dofvec_run',[],[],...
+  'deconv_meanfd',[],[],...
   'forceflag',false,[false true],...
 });
 
@@ -130,21 +136,31 @@ end
 % DOF columns are written only when dofvec is not all-NaN
 dof_flag = any(isfinite(data.dofvec(:)));
 
-% censored mean/max mot/rotat/trans columns are rsfmri-only (release 7.0
-% data dictionary defines no equivalent tfmri fields)
+% rest has no per-run or deconvolution columns; the censored and direction
+%   columns, of the correlation's frames, are written for rest and tasks
 rsfmri_flag = strcmp(parms.task,'rest');
+
+% the deconvolution's mean FD, from the caller (tasks only)
+deconv_flag = ~rsfmri_flag && ~isempty(parms.deconv_meanfd);
+if deconv_flag
+  if nsubs ~= 1
+    fprintf('%s: ERROR: deconv_meanfd is for single-subject mode only\n',mfilename);
+    return;
+  end
+  data.deconv_meanfd = single(parms.deconv_meanfd(1));
+end
 
 mmil_mkdir(parms.outdir);
 
 % build column names
-colnames = build_colnames(parms.colstem, nruns, dof_flag, rsfmri_flag);
+colnames = build_colnames(parms.colstem, nruns, dof_flag, rsfmri_flag, deconv_flag);
 
 % build data matrix (one row per subject)
 data_mat = cell(nsubs+1, 2+length(colnames));
 data_mat(1,:) = cat(2,{'participant_id','session_id'},colnames);
 for i = 1:nsubs
   d = i;
-  row = build_row(data, d, nruns, dof_flag, rsfmri_flag);
+  row = build_row(data, d, nruns, dof_flag, rsfmri_flag, deconv_flag);
   data_mat(i+1,:) = cat(2,{participant_ids{i},session_ids{i}},row);
 end
 
@@ -155,7 +171,7 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function colnames = build_colnames(colstem, nruns, dof_flag, rsfmri_flag)
+function colnames = build_colnames(colstem, nruns, dof_flag, rsfmri_flag, deconv_flag)
   colnames = {};
   colnames{end+1} = sprintf('%s__frame_count',           colstem);
   colnames{end+1} = sprintf('%s__tr_mean',               colstem);
@@ -168,34 +184,31 @@ function colnames = build_colnames(colstem, nruns, dof_flag, rsfmri_flag)
   end
   colnames{end+1} = sprintf('%s__mot_mean',               colstem);
   colnames{end+1} = sprintf('%s__mot_max',                colstem);
-  if rsfmri_flag
-    colnames{end+1} = sprintf('%s__mot__censor_mean',     colstem);
-    colnames{end+1} = sprintf('%s__mot__censor_max',      colstem);
-    colnames{end+1} = sprintf('%s__mot__xdir_mean',       colstem);
-    colnames{end+1} = sprintf('%s__mot__ydir_mean',       colstem);
-    colnames{end+1} = sprintf('%s__mot__zdir_mean',       colstem);
-    colnames{end+1} = sprintf('%s__mot__xdir__censor_mean',colstem);
-    colnames{end+1} = sprintf('%s__mot__ydir__censor_mean',colstem);
-    colnames{end+1} = sprintf('%s__mot__zdir__censor_mean',colstem);
+  if deconv_flag
+    colnames{end+1} = sprintf('%s__mot__fdsub__09_mean',  colstem);
   end
+  colnames{end+1} = sprintf('%s__mot__censor_mean',     colstem);
+  colnames{end+1} = sprintf('%s__mot__censor_max',      colstem);
+  colnames{end+1} = sprintf('%s__mot__xdir_mean',       colstem);
+  colnames{end+1} = sprintf('%s__mot__ydir_mean',       colstem);
+  colnames{end+1} = sprintf('%s__mot__zdir_mean',       colstem);
+  colnames{end+1} = sprintf('%s__mot__xdir__censor_mean',colstem);
+  colnames{end+1} = sprintf('%s__mot__ydir__censor_mean',colstem);
+  colnames{end+1} = sprintf('%s__mot__zdir__censor_mean',colstem);
   colnames{end+1} = sprintf('%s__rotat_mean',             colstem);
   colnames{end+1} = sprintf('%s__rotat_max',              colstem);
-  if rsfmri_flag
-    colnames{end+1} = sprintf('%s__rotat__censor_mean',   colstem);
-    colnames{end+1} = sprintf('%s__rotat__censor_max',    colstem);
-    colnames{end+1} = sprintf('%s__rotat__xdir_mean',     colstem);
-    colnames{end+1} = sprintf('%s__rotat__ydir_mean',     colstem);
-    colnames{end+1} = sprintf('%s__rotat__zdir_mean',     colstem);
-    colnames{end+1} = sprintf('%s__rotat__xdir__censor_mean',colstem);
-    colnames{end+1} = sprintf('%s__rotat__ydir__censor_mean',colstem);
-    colnames{end+1} = sprintf('%s__rotat__zdir__censor_mean',colstem);
-  end
+  colnames{end+1} = sprintf('%s__rotat__censor_mean',   colstem);
+  colnames{end+1} = sprintf('%s__rotat__censor_max',    colstem);
+  colnames{end+1} = sprintf('%s__rotat__xdir_mean',     colstem);
+  colnames{end+1} = sprintf('%s__rotat__ydir_mean',     colstem);
+  colnames{end+1} = sprintf('%s__rotat__zdir_mean',     colstem);
+  colnames{end+1} = sprintf('%s__rotat__xdir__censor_mean',colstem);
+  colnames{end+1} = sprintf('%s__rotat__ydir__censor_mean',colstem);
+  colnames{end+1} = sprintf('%s__rotat__zdir__censor_mean',colstem);
   colnames{end+1} = sprintf('%s__trans_mean',             colstem);
   colnames{end+1} = sprintf('%s__trans_max',              colstem);
-  if rsfmri_flag
-    colnames{end+1} = sprintf('%s__trans__censor_mean',   colstem);
-    colnames{end+1} = sprintf('%s__trans__censor_max',    colstem);
-  end
+  colnames{end+1} = sprintf('%s__trans__censor_mean',   colstem);
+  colnames{end+1} = sprintf('%s__trans__censor_max',    colstem);
   if dof_flag
     colnames{end+1} = sprintf('%s_dof',                   colstem);
   end
@@ -222,7 +235,7 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function row = build_row(data, d, nruns, dof_flag, rsfmri_flag)
+function row = build_row(data, d, nruns, dof_flag, rsfmri_flag, deconv_flag)
   vals = [];
   vals(end+1) = data.nframesvec(d);
   vals(end+1) = data.TR;
@@ -235,34 +248,31 @@ function row = build_row(data, d, nruns, dof_flag, rsfmri_flag)
   end
   vals(end+1) = data.meanfdvec(d);
   vals(end+1) = data.maxfdvec(d);
-  if rsfmri_flag
-    vals(end+1) = data.meanfdcvec(d);
-    vals(end+1) = data.maxfdcvec(d);
-    vals(end+1) = data.meanfdmat(d,1);
-    vals(end+1) = data.meanfdmat(d,2);
-    vals(end+1) = data.meanfdmat(d,3);
-    vals(end+1) = data.meanfdcmat(d,1);
-    vals(end+1) = data.meanfdcmat(d,2);
-    vals(end+1) = data.meanfdcmat(d,3);
+  if deconv_flag
+    vals(end+1) = data.deconv_meanfd;
   end
+  vals(end+1) = data.meanfdcvec(d);
+  vals(end+1) = data.maxfdcvec(d);
+  vals(end+1) = data.meanfdmat(d,1);
+  vals(end+1) = data.meanfdmat(d,2);
+  vals(end+1) = data.meanfdmat(d,3);
+  vals(end+1) = data.meanfdcmat(d,1);
+  vals(end+1) = data.meanfdcmat(d,2);
+  vals(end+1) = data.meanfdcmat(d,3);
   vals(end+1) = data.meanrotvec(d);
   vals(end+1) = data.maxrotvec(d);
-  if rsfmri_flag
-    vals(end+1) = data.meanrotcvec(d);
-    vals(end+1) = data.maxrotcvec(d);
-    vals(end+1) = data.meanfdmat(d,4);
-    vals(end+1) = data.meanfdmat(d,5);
-    vals(end+1) = data.meanfdmat(d,6);
-    vals(end+1) = data.meanfdcmat(d,4);
-    vals(end+1) = data.meanfdcmat(d,5);
-    vals(end+1) = data.meanfdcmat(d,6);
-  end
+  vals(end+1) = data.meanrotcvec(d);
+  vals(end+1) = data.maxrotcvec(d);
+  vals(end+1) = data.meanfdmat(d,4);
+  vals(end+1) = data.meanfdmat(d,5);
+  vals(end+1) = data.meanfdmat(d,6);
+  vals(end+1) = data.meanfdcmat(d,4);
+  vals(end+1) = data.meanfdcmat(d,5);
+  vals(end+1) = data.meanfdcmat(d,6);
   vals(end+1) = data.meantransvec(d);
   vals(end+1) = data.maxtransvec(d);
-  if rsfmri_flag
-    vals(end+1) = data.meantranscvec(d);
-    vals(end+1) = data.maxtranscvec(d);
-  end
+  vals(end+1) = data.meantranscvec(d);
+  vals(end+1) = data.maxtranscvec(d);
   if dof_flag
     vals(end+1) = data.dofvec(d);
   end

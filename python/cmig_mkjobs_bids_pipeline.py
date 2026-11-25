@@ -105,6 +105,10 @@ IMAGE_ROOTS = {'rawqc_rootdir': 'rawqc_rootdir', 'proc_rootdir': 'proc_rootdir',
 #                         the session's rawdata events changed after that
 #                         status's run started
 #   no_delete           : if 1, errflag deletes nothing (the script reruns its failures)
+#   modality_status     : optional (dir_key, subpath with {mod}, [mods]): one status
+#                         file per modality whose rawdata {pid}/{sid}/{mod} exists,
+#                         ahead of status_files, so errflag 1 deletes only the
+#                         failed modality's directory
 #   stale_check         : optional {'output': (dir_key, subpath), 'inputs':[]}.
 #                         A session is stale where an input ran after the
 #                         output did, comparing each input's status procdate
@@ -349,6 +353,11 @@ SCRIPT_CONFIG = {
     'cmig_pipeline_bids_rawqc': {
         'scan_dir_arg': 'raw_rootdir',
         'required_subdirs': ['anat'],
+        # the modalities the pipeline runs (those in rawdata), then its own
+        #   session status, last, for pc and pcqc and a job that did not finish
+        'modality_status': ('rawqc_rootdir',
+                            '{pid}/{sid}/{mod}/{pid}_{sid}_desc-rawqc_status.tsv',
+                            ['anat', 'func', 'dwi', 'fmap']),
         'status_files': [
             ('rawqc_rootdir', '{pid}/{sid}/{pid}_{sid}_desc-rawqc_status.tsv'),
         ],
@@ -548,8 +557,14 @@ def _status_files(config, tasks, opts, pid=None, sid=None, dirs=None):
     """The config's status files for one session, func ones included where
     _func_included() and dwi ones where _dwi_included(); without a postqc fmap
     one where cmig_pipeline_bids skips that step (no processed and no usable
-    field map of that acq type)."""
-    files = list(config['status_files'])
+    field map of that acq type); first, the modality_status ones of the
+    modalities in rawdata."""
+    files = []
+    if config.get('modality_status') and dirs and dirs.get('raw_rootdir'):
+        dir_key, subpath_tmpl, mods = config['modality_status']
+        files += [(dir_key, subpath_tmpl.replace('{mod}', mod)) for mod in mods
+                  if os.path.isdir(os.path.join(dirs['raw_rootdir'], pid, sid, mod))]
+    files += list(config['status_files'])
     have_dirs = bool(dirs and dirs.get('proc_rootdir') and dirs.get('raw_rootdir'))
     groups = []
     if _func_included(config, tasks, opts):

@@ -37,7 +37,8 @@ function [vol, M, mr_parms, volsz] = fs_load_mgh(fname,slices,frames,headeronly,
 % Prev Mod: 04/14/20 by Don Hagler
 % Prev Mod: 06/28/20 by Don Hagler
 % Prev Mod: 01/09/21 by Don Hagler
-% Last Mod: 05/16/25 by Don Hagler
+% Prev Mod: 05/16/25 by Don Hagler
+% Last Mod: 11/21/26 by Don Hagler
 %
 
 vol = [];
@@ -145,23 +146,25 @@ MRI_INT =    1 ;
 MRI_FLOAT =  3 ;
 MRI_SHORT =  4 ;
 %MRI_BITMAP = 5 ;
+MRI_USHRT = 10 ;
 
-try
-  % Determine number of bytes per voxel
-  switch type
-   case MRI_FLOAT,
-    nbytespervox = 4;
-   case MRI_UCHAR,
-    nbytespervox = 1;
-   case MRI_SHORT,
-    nbytespervox = 2;
-   case MRI_INT,
-    nbytespervox = 4;
-  end
-catch
+% Determine number of bytes per voxel
+switch type
+ case MRI_FLOAT,
+  nbytespervox = 4;
+ case MRI_UCHAR,
+  nbytespervox = 1;
+ case MRI_SHORT,
+  nbytespervox = 2;
+ case MRI_USHRT,
+  nbytespervox = 2;
+ case MRI_INT,
+  nbytespervox = 4;
+ otherwise
+  fclose(fid);
   if zipflag, delete(fname); end
-  error('header of %s has bad type info',orig_fname);
-end;
+  error('unsupported data type %d in %s',type,orig_fname);
+end
 
 if(headeronly)
   fseek(fid,nv*nbytespervox,'cof');
@@ -191,6 +194,8 @@ if(slices(1) <= 0 && frames(1) <= 0)
     vol = fread(fid, nv, 'uchar');
    case MRI_SHORT,
     vol = fread(fid, nv, 'short');
+   case MRI_USHRT,
+    vol = fread(fid, nv, 'uint16');
    case MRI_INT,
     vol = fread(fid, nv, 'int');
   end
@@ -249,6 +254,8 @@ for f=1:length(frames)
       [tmpslice nread]  = fread(fid, nvslice, 'uchar') ; 
      case MRI_SHORT,
       [tmpslice nread]  = fread(fid, nvslice, 'short') ; 
+     case MRI_USHRT,
+      [tmpslice nread]  = fread(fid, nvslice, 'uint16') ; 
      case MRI_INT,
       [tmpslice nread]  = fread(fid, nvslice, 'int') ; 
     end

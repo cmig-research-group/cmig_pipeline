@@ -47,7 +47,8 @@ Prev mod: 10/28/2026 by Diliana Pecheva
 Prev mod: 11/02/2026 by Don Hagler
 Prev mod: 11/06/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
-Last mod: 11/12/2026 by Don Hagler
+Prev mod: 11/12/2026 by Don Hagler
+Last mod: 11/21/2026 by Don Hagler
 
 Renamed from check_dwi_outputs.py (abcd_preproc 81210b9)
 """
@@ -72,6 +73,8 @@ PROC_DIR = os.path.join("dwi", "proc_dwi")   # a session's intermediate files an
 SIDECAR_FIELDS = ("PhaseEncodingDirection", "RegistrationMatrixT1w", "B0UnwarpApplied",
                   "SourceVolumeSize", "VolumeSize", "SpatialReference", "TORTOISEVersion")
 SERIES_SUFFIX = "_desc-preproc_dwi"
+# the refusal prefix the rounds hold a session on (not retried)
+NOT_PROCESSED = "not processed: "
 
 
 def split_session(session_dir):
@@ -189,7 +192,7 @@ def check_series(series, b0dx, fmap_epi, max_rotation=MAX_ROTATION, proc_dir=Non
                 angle = gradient_rotation(world_directions(raw_bvecs, nib.load(raw).affine),
                                           world_directions(bvecs, img.affine))
                 if angle > max_rotation:
-                    p.append(f"gradient directions rotated {angle:.0f} degrees from the raw data "
+                    p.append(f"{NOT_PROCESSED}gradient directions rotated {angle:.0f} degrees from the raw data "
                              f"(limit {max_rotation:g}): likely misregistered to the sMRI image")
         except (OSError, ValueError) as err:
             p.append(f"unreadable raw data copy in {proc_dir}: {err}")
@@ -268,7 +271,12 @@ def check_session(session_dir, max_rotation=MAX_ROTATION, proc_dir=None):
     except (OSError, ValueError) as err:
         return [f"unreadable output: {err}"]
     for s in series:
-        p += [f"{os.path.basename(s)}: {q}" for q in check_series(s, b, e, max_rotation, proc_dir)]
+        for q in check_series(s, b, e, max_rotation, proc_dir):
+            # a refusal keeps its prefix in front of the series name
+            if q.startswith(NOT_PROCESSED):
+                p.append(f"{NOT_PROCESSED}{os.path.basename(s)}: {q[len(NOT_PROCESSED):]}")
+            else:
+                p.append(f"{os.path.basename(s)}: {q}")
     expected = 2 if is_philips(series[0]) else 1
     if len(series) != expected:
         p.append(f"expected {expected} series in dwi/, found {len(series)}")

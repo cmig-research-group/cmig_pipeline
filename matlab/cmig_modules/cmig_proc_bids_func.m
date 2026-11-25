@@ -97,7 +97,9 @@ function [outdir,outdir_fmap,errcode,errmsg] = cmig_proc_bids_func(participant_i
 % Prev Mod: 11/11/2026 by Don Hagler
 % Prev Mod: 11/12/2026 by Don Hagler
 % Prev Mod: 11/13/2026 by Don Hagler
-% Last Mod: 11/14/2026 by Don Hagler
+% Prev Mod: 11/14/2026 by Don Hagler
+% Prev Mod: 11/20/2026 by Don Hagler
+% Last Mod: 11/21/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,16 +138,19 @@ end
 [parms,procflag] = check_output(parms);
 
 % process data
-if procflag, [parms,errcode,errmsg] = proc_data(parms); end
+if procflag
+  [parms,errcode,tmp_errmsg] = proc_data(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+end
 
 % cleanup tmpdirs
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir_fmap,parms.tmpdir_fmap);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
 
 % write status file
@@ -265,19 +270,30 @@ function [parms,errcode,errmsg] = check_input(parms)
     return;
   end
 
-  % check field map pairs
-  [parms,errmsg] = check_fmap_pairs(parms);
+  % check field map pairs; an unreadable field map (e.g. a truncated .nii.gz)
+  %   stops the session, with a status
+  try
+    [parms,errmsg] = check_fmap_pairs(parms);
+  catch me
+    errcode = 1;
+    tmp_errmsg = sprintf('check_fmap_pairs: %s',me.message);
+    fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+    return;
+  end
 
   % check whether there are usable field map pairs for B0 unwarp
   if parms.B0unwarp_flag>0 && isempty(parms.fnames_data_fmap)
-    errmsg = 'no usable fmap scans necessary for B0 unwarping';
+    tmp_errmsg = 'no usable fmap scans necessary for B0 unwarping';
     if parms.B0unwarp_flag>1
       errcode = 1;
-      errmsg = ['not processed: ' errmsg];
-      fprintf('%s: ERROR: %s\n',mfilename,errmsg);
+      % the refusal leads, so the message keeps its not processed prefix
+      errmsg = cmig_append_errmsg(['not processed: ' tmp_errmsg],errmsg);
+      fprintf('%s: ERROR: not processed: %s\n',mfilename,tmp_errmsg);
       return;
     else
-      fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
     parms.B0unwarp_flag = 0;
   end
@@ -296,13 +312,14 @@ function [parms,errcode,errmsg] = check_input(parms)
     end
   end
   if ~gradunwarp_ok
-    errmsg = 'missing gradwarp type necessary for grad unwarp';
+    tmp_errmsg = 'missing gradwarp type necessary for grad unwarp';
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if parms.gradunwarp_flag>1
       errcode = 1;
-      fprintf('%s: ERROR: %s\n',mfilename,errmsg);
+      fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
       return;
     else
-      fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
     end
     parms.gradunwarp_flag = 0;
   end
@@ -413,7 +430,8 @@ function [parms,errcode,errmsg] = proc_data(parms)
 
   % copy events files
   % NOTE: copied first, so a failed session still has its events files
-  [parms,errcode,errmsg] = copy_events(parms);
+  [parms,errcode,tmp_errmsg] = copy_events(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
   
@@ -422,15 +440,18 @@ function [parms,errcode,errmsg] = proc_data(parms)
   parms = set_spatial_reference(parms);
 
   % process field map scans
-  [parms,errcode,errmsg] = proc_fmap(parms);
+  [parms,errcode,tmp_errmsg] = proc_fmap(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
   
   % process all functional scans
-  [parms,errcode,errmsg] = proc_func(parms);
+  [parms,errcode,tmp_errmsg] = proc_func(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
 
   % IntendedFor of the field maps, from the bold sidecars, once all are written
   % NOTE: also after a failed bold run, whose sidecar is then absent or old
-  set_fmap_intended_for(parms);
+  tmp_errmsg = set_fmap_intended_for(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -609,13 +630,16 @@ function [parms,errcode,errmsg] = proc_fmap(parms)
   if ~parms.proc_fmap_flag && ~parms.proc_func_flag && ~parms.proc_b0dx_flag, return; end
 
   % process reference fmap scans
-  [parms.fname_fmap_for_ref,errcode,errmsg] = proc_fmap_ref(parms.s_fmap_for,parms);
+  [parms.fname_fmap_for_ref,errcode,tmp_errmsg] = proc_fmap_ref(parms.s_fmap_for,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
-  [parms.fname_fmap_rev_ref,errcode,errmsg] = proc_fmap_ref(parms.s_fmap_rev,parms);
+  [parms.fname_fmap_rev_ref,errcode,tmp_errmsg] = proc_fmap_ref(parms.s_fmap_rev,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
   % register reference to T1
-  [parms,errcode,errmsg] = reg_ref_to_T1(parms);
+  [parms,errcode,tmp_errmsg] = reg_ref_to_T1(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
   save_reg_flag_for = ~parms.revflag;
   save_reg_flag_rev = parms.revflag;
@@ -635,7 +659,8 @@ function [parms,errcode,errmsg] = proc_fmap(parms)
         proc_scan(parms.fnames_data_fmap{s},parms.fnames_info_fmap{s},parms,0,1);
     end
   end
-  [errcode,errmsg] = cmig_summarize_errcodes(errcodes,errmsgs);
+  [errcode,tmp_errmsg] = cmig_summarize_errcodes(errcodes,errmsgs);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
 return;
@@ -652,15 +677,18 @@ function [parms,errcode,errmsg] = proc_func(parms)
   parms.M_GE_to_SE = [];
 
   % process reference functional scans
-  [parms.fname_func_for_ref,errcode,errmsg] = proc_func_ref(parms.s_func_for,parms.s_fmap_for,parms);
+  [parms.fname_func_for_ref,errcode,tmp_errmsg] = proc_func_ref(parms.s_func_for,parms.s_fmap_for,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
-  [parms.fname_func_rev_ref,errcode,errmsg] = proc_func_ref(parms.s_func_rev,parms.s_fmap_rev,parms);
+  [parms.fname_func_rev_ref,errcode,tmp_errmsg] = proc_func_ref(parms.s_func_rev,parms.s_fmap_rev,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
   if ~isempty(parms.fnames_data_fmap)
     % register reference func scans to reference fmap scans
-    [parms,errcode,errmsg] = reg_ref_func_to_fmap(parms);
-    if errcode, return; end;
+    [parms,errcode,tmp_errmsg] = reg_ref_func_to_fmap(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+    if errcode, return; end
     save_reg_flag_for = 0;
     save_reg_flag_rev = 0;
     % tie the func reference grid to the resampled fmap reference grid
@@ -676,8 +704,9 @@ function [parms,errcode,errmsg] = proc_func(parms)
     end
   else
     % register reference to T1
-    [parms,errcode,errmsg] = reg_ref_to_T1(parms);
-    if errcode, return; end;
+    [parms,errcode,tmp_errmsg] = reg_ref_to_T1(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+    if errcode, return; end
     save_reg_flag_for = ~parms.revflag;
     save_reg_flag_rev = parms.revflag;
   end
@@ -697,7 +726,8 @@ function [parms,errcode,errmsg] = proc_func(parms)
         proc_scan(parms.fnames_data_func{s},parms.fnames_info_func{s},parms,0,0);
     end
   end
-  [errcode,errmsg] = cmig_summarize_errcodes(errcodes,errmsgs);
+  [errcode,tmp_errmsg] = cmig_summarize_errcodes(errcodes,errmsgs);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 return;
 
@@ -748,9 +778,10 @@ function [parms,errmsg] = check_fmap_pairs(parms)
       % NOTE: a pair is one forward and one reverse scan; anything else is skipped,
       %   including unassigned field maps, which share the default label
       if numel(f)>1 || numel(r)>1
-        errmsg = sprintf('%d forward and %d reverse field maps for B0FieldIdentifier %s; expected one of each',...
+        tmp_errmsg = sprintf('%d forward and %d reverse field maps for B0FieldIdentifier %s; expected one of each',...
           numel(f),numel(r),uniq_fmap_labels{i});
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       s_for = idx(f);
@@ -759,47 +790,52 @@ function [parms,errmsg] = check_fmap_pairs(parms)
       % check phase-encode directions
       phasedirs = get_phasedirs(parms.fmap_info([s_for,s_rev]));
       if length(unique(phasedirs)) > 1
-        errmsg = sprintf('phase-encode direction differs for %s and %s (%d vs %d)',...
+        tmp_errmsg = sprintf('phase-encode direction differs for %s and %s (%d vs %d)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).PhaseEncodingDirection,parms.fmap_info(s_rev).PhaseEncodingDirection);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       % check voxel size mismatch
       if ~isnan(parms.fmap_info(s_for).SliceThickness) && ...
          ~isnan(parms.fmap_info(s_rev).SliceThickness) && ...
          parms.fmap_info(s_for).SliceThickness ~= parms.fmap_info(s_rev).SliceThickness
-        errmsg = sprintf('SliceThickness differs for %s and %s (%g vs %g)',...
+        tmp_errmsg = sprintf('SliceThickness differs for %s and %s (%g vs %g)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).SliceThickness,parms.fmap_info(s_rev).SliceThickness);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       if ~isnan(parms.fmap_info(s_for).ReconMatrixPE) && ...
          ~isnan(parms.fmap_info(s_rev).ReconMatrixPE) && ...
          parms.fmap_info(s_for).ReconMatrixPE ~= parms.fmap_info(s_rev).ReconMatrixPE
-        errmsg = sprintf('ReconMatrixPE differs for %s and %s (%d vs %d)',...
+        tmp_errmsg = sprintf('ReconMatrixPE differs for %s and %s (%d vs %d)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).ReconMatrixPE,parms.fmap_info(s_rev).ReconMatrixPE);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       if ~isnan(parms.fmap_info(s_for).FrequencyEncodingSteps) && ...
          ~isnan(parms.fmap_info(s_rev).FrequencyEncodingSteps) && ...
          parms.fmap_info(s_for).FrequencyEncodingSteps ~= parms.fmap_info(s_rev).FrequencyEncodingSteps
-        errmsg = sprintf('FrequencyEncodingSteps differs for %s and %s (%d vs %d)',...
+        tmp_errmsg = sprintf('FrequencyEncodingSteps differs for %s and %s (%d vs %d)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).FrequencyEncodingSteps,parms.fmap_info(s_rev).FrequencyEncodingSteps);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       if ~isnan(parms.fmap_info(s_for).PhaseEncodingSteps) && ...
          ~isnan(parms.fmap_info(s_rev).PhaseEncodingSteps) && ...
          parms.fmap_info(s_for).PhaseEncodingSteps ~= parms.fmap_info(s_rev).PhaseEncodingSteps
-        errmsg = sprintf('PhaseEncodingSteps differs for %s and %s (%d vs %d)',...
+        tmp_errmsg = sprintf('PhaseEncodingSteps differs for %s and %s (%d vs %d)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).PhaseEncodingSteps,parms.fmap_info(s_rev).PhaseEncodingSteps);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       % check echo spacing mismatch, within a relative tolerance: dcm2niix
@@ -809,54 +845,59 @@ function [parms,errmsg] = check_fmap_pairs(parms)
       ees_rev = parms.fmap_info(s_rev).EffectiveEchoSpacing;
       if ~isnan(ees_for) && ~isnan(ees_rev) && ...
          abs(ees_for - ees_rev) > ees_reltol * max(abs(ees_for),abs(ees_rev))
-        errmsg = sprintf('EffectiveEchoSpacing differs for %s and %s (%g vs %g)',...
+        tmp_errmsg = sprintf('EffectiveEchoSpacing differs for %s and %s (%g vs %g)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           parms.fmap_info(s_for).EffectiveEchoSpacing,parms.fmap_info(s_rev).EffectiveEchoSpacing);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end      
       % check slice orientation mismatch
       if any(parms.fmap_info(s_for).ImageOrientationPatientDICOM ~= parms.fmap_info(s_rev).ImageOrientationPatientDICOM & ...
              ~(isnan(parms.fmap_info(s_for).ImageOrientationPatientDICOM) & isnan(parms.fmap_info(s_rev).ImageOrientationPatientDICOM)))
-        errmsg = sprintf('ImageOrientationPatientDICOM differs for %s and %s (%s vs %s)',...
+        tmp_errmsg = sprintf('ImageOrientationPatientDICOM differs for %s and %s (%s vs %s)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           strtrim(sprintf('%d ',parms.fmap_info(s_for).ImageOrientationPatientDICOM(:))),...
           strtrim(sprintf('%d ',parms.fmap_info(s_rev).ImageOrientationPatientDICOM(:))));
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end      
       % check shim setting mismatch
       if any(parms.fmap_info(s_for).ShimSetting ~= parms.fmap_info(s_rev).ShimSetting & ...
              ~(isnan(parms.fmap_info(s_for).ShimSetting) & isnan(parms.fmap_info(s_rev).ShimSetting)))
-        errmsg = sprintf('ShimSetting differs for %s and %s (%s vs %s)',...
+        tmp_errmsg = sprintf('ShimSetting differs for %s and %s (%s vs %s)',...
           parms.fnames_info_fmap{s_for},parms.fnames_info_fmap{s_rev},...
           strtrim(sprintf('%d ',parms.fmap_info(s_for).ShimSetting(:))),...
           strtrim(sprintf('%d ',parms.fmap_info(s_rev).ShimSetting(:))));
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       % check vox2ras/dimension mismatch between the actual images; JSON
       % sidecars can match while FOV/cropping/offset differ (e.g. when a
       % scan operator diverges from protocol). Read headers only (no file
       % is created; this runs on every invocation, before check_output).
-      [~,M_for,volsz_for] = cmig_read_nifti(parms.fnames_data_fmap{s_for},1);
-      [~,M_rev,volsz_rev] = cmig_read_nifti(parms.fnames_data_fmap{s_rev},1);
+      [M_for,volsz_for] = read_fmap_header(parms.fnames_data_fmap{s_for});
+      [M_rev,volsz_rev] = read_fmap_header(parms.fnames_data_fmap{s_rev});
       % tight rotation tolerance: any rotation changes the distortion
       % pattern (topup cannot correct it); loose offset tolerance: topup's
       % motion-correction step absorbs a translational offset
       [~,rotmatch,offmatch,maxrot,maxoff] = ...
         fs_vox2ras_match(M_for,M_rev,parms.vox2ras_maxdiff,parms.offset_maxdiff);
       if ~rotmatch || ~offmatch
-        errmsg = sprintf('vox2ras mismatch for %s and %s (max rotation %0.4f deg, max offset %0.4f mm)',...
+        tmp_errmsg = sprintf('vox2ras mismatch for %s and %s (max rotation %0.4f deg, max offset %0.4f mm)',...
           parms.fnames_data_fmap{s_for},parms.fnames_data_fmap{s_rev},maxrot,maxoff);
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       if any(volsz_for(1:3) ~= volsz_rev(1:3))
-        errmsg = sprintf('volume dimensions differ for %s and %s ([%s] vs [%s])',...
+        tmp_errmsg = sprintf('volume dimensions differ for %s and %s ([%s] vs [%s])',...
           parms.fnames_data_fmap{s_for},parms.fnames_data_fmap{s_rev},...
           strtrim(sprintf('%d ',volsz_for(1:3))),strtrim(sprintf('%d ',volsz_rev(1:3))));
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       parms.s_fmap_for(end+1) = s_for;
@@ -871,6 +912,18 @@ function [parms,errmsg] = check_fmap_pairs(parms)
   parms.fmap_info = parms.fmap_info(s_fmap);
   [~,parms.s_fmap_for] = intersect(s_fmap,parms.s_fmap_for,'stable');
   [~,parms.s_fmap_rev] = intersect(s_fmap,parms.s_fmap_rev,'stable');
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [M,volsz] = read_fmap_header(fname)
+  % the header of a field map; an unreadable file (e.g. a truncated .nii.gz)
+  %   throws with its name, for check_input's errmsg
+  try
+    [~,M,volsz] = cmig_read_nifti(fname,1);
+  catch me
+    error('failed to read header of %s: %s',fname,me.message);
+  end
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1167,13 +1220,14 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
   if tparms.gradunwarp_flag
     [tparms.gruw_type,tparms.gruw_unwarpflag,tparms.gruw_isoctrflag] = cmig_get_bids_gradwarpinfo(scan_info);
     if isnan(tparms.gruw_type)
-      errmsg = sprintf('skipping grad unwarp due to missing grad warp type');
+      tmp_errmsg = 'skipping grad unwarp due to missing grad warp type';
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if tparms.gradunwarp_flag > 1 && ~mmil_Philips(scan_info)
         errcode = 1;
-        fprintf('%s: ERROR: %s\n',mfilename,errmsg);
+        fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
         return;
       else
-        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
       end
       tparms.gradunwarp_flag = 0;
       % NOTE: NaN is outside bold_correct_data's [0:18] range for gruw_type
@@ -1187,18 +1241,29 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
   mmil_mkdir(tmpdir);
 
   % import data (convert to mgz)
-  fname_tmp = cmig_import_to_mgz(fname_data,tmpdir,[],parms.forceflag);
+  % NOTE: an error here is caught so the module writes its status
+  try
+    fname_tmp = cmig_import_to_mgz(fname_data,tmpdir,[],parms.forceflag);
+  catch me
+    [errcode,errmsg] = scan_step_failed('cmig_import_to_mgz',me,errmsg);
+    return;
+  end
 
   % import field maps
   if tparms.B0unwarp_flag
     [~,fstem_for] = cmig_get_fileparts(fname_for);
     tmpdir_for = sprintf('%s/%s',parms.tmpdir_fmap,fstem_for);
     mmil_mkdir(tmpdir_for);
-    fname_for_tmp = cmig_import_to_mgz(fname_for,tmpdir_for,[],parms.forceflag);
     [~,fstem_rev] = cmig_get_fileparts(fname_rev);
     tmpdir_rev = sprintf('%s/%s',parms.tmpdir_fmap,fstem_rev);
     mmil_mkdir(tmpdir_rev);
-    fname_rev_tmp = cmig_import_to_mgz(fname_rev,tmpdir_rev,[],parms.forceflag);
+    try
+      fname_for_tmp = cmig_import_to_mgz(fname_for,tmpdir_for,[],parms.forceflag);
+      fname_rev_tmp = cmig_import_to_mgz(fname_rev,tmpdir_rev,[],parms.forceflag);
+    catch me
+      [errcode,errmsg] = scan_step_failed('cmig_import_to_mgz',me,errmsg);
+      return;
+    end
     % set file name of B0dx volume
     tparms.fname_B0dx = sprintf('%s/%sVS%s_B0dx%s',tmpdir_for,fstem_for,fstem_rev,parms.outext);
     % registration of the bold to its field map pair, named here to be read back
@@ -1213,7 +1278,12 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
   tparms.fname_rev = fname_rev_tmp;
 
   % get volume info for input volume
-  [M_raw,volsz_raw] = mmil_load_mgh_info(fname_tmp,[],tmpdir);
+  try
+    [M_raw,volsz_raw] = mmil_load_mgh_info(fname_tmp,[],tmpdir);
+  catch me
+    [errcode,errmsg] = scan_step_failed('mmil_load_mgh_info',me,errmsg);
+    return;
+  end
 
   % save first frame of reference scan if multi-frame
   if ref_flag && volsz_raw(4)>1
@@ -1307,7 +1377,8 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
 
   % call bold_correct_data
   % NOTE: correct_data reports its own errors
-  [fname_tmp,fname_B0dx,fname_motion_txt,start_info,errcode,errmsg] = correct_data(fname_tmp,tparms);
+  [fname_tmp,fname_B0dx,fname_motion_txt,start_info,errcode,tmp_errmsg] = correct_data(fname_tmp,tparms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
   % export B0dx displacement field to outdir_fmap with BIDS-style name
@@ -1315,7 +1386,8 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
   %   the output frame, and export_b0dx needs the forward scan's motion matrix
   if ~ref_flag && ~tparms.revflag && tparms.B0unwarp_flag && ...
      ~isempty(fname_B0dx) && exist(fname_B0dx,'file')
-    export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,tparms.outfix,parms);
+    tmp_errmsg = export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,tparms.outfix,parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   end
 
   % stop here for reference scans
@@ -1331,7 +1403,8 @@ function [fname_data_proc,fname_info_proc,errcode,errmsg] = proc_scan(fname_data
   fname_data_proc = export_data(fname_tmp,set_proc_fstem(fstem),outdir,scan_info.RepetitionTime);
 
   % write motion tsv
-  write_motion_tsv(fname_motion_txt,fname_data_proc);
+  tmp_errmsg = write_motion_tsv(fname_motion_txt,fname_data_proc);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
 
   % fields the pipeline computes, merged over the copied ones
   added = [];
@@ -1426,6 +1499,39 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+function [errcode,errmsg] = scan_step_failed(step,me,errmsg)
+  % a proc_scan step with no errcode output threw: errcode 1, its message
+  %   appended (a resource error is errcode 1 as well)
+  errcode = 1;
+  msg = me.message;
+  if strcmp(step,'cmig_import_to_mgz')
+    msg = short_import_msg(msg);
+  end
+  tmp_errmsg = sprintf('%s: %s',step,msg);
+  fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function msg = short_import_msg(msg)
+  % the import error's first line ("failed to convert <in> to <out>:") and
+  %   the lines of mri_convert's output with "error" or a resource error,
+  %   not its full command and output
+  lines = strtrim(regexp(msg,'\n','split'));
+  lines = lines(~cellfun(@isempty,lines));
+  if isempty(lines), return; end
+  keep = false(size(lines));
+  keep(1) = true;
+  for i=2:length(lines)
+    keep(i) = ~isempty(regexpi(lines{i},'error','once')) || ...
+              cmig_is_resource_error(lines{i});
+  end
+  msg = strjoin(unique(lines(keep),'stable'),'; ');
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 function desc = set_description(fmap_flag,tparms)
   % the processing applied to the scan, from the flags proc_scan passes to
   %   bold_correct_data
@@ -1454,12 +1560,13 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function set_fmap_intended_for(parms)
+function errmsg = set_fmap_intended_for(parms)
   % IntendedFor of each proc field map: the proc bold runs whose sidecars
   %   name it in B0UnwarpFieldMapFor/Rev (both scans of the pair); omitted for
   %   a field map no processed run used
   % NOTE: read from the sidecars on disk, so a rerun with forceflag 0 that
   %   leaves some bold or field map outputs in place stays consistent
+  errmsg = [];
   nfmap = length(parms.fnames_data_fmap);
   if nfmap==0, return; end
   fstems_fmap = cell(nfmap,1);
@@ -1473,7 +1580,10 @@ function set_fmap_intended_for(parms)
     if ~exist([fname_out '.nii.gz'],'file') || ~exist([fname_out '.json'],'file'), continue; end
     try
       info = jsondecode(fileread([fname_out '.json']));
-    catch
+    catch me
+      tmp_errmsg = sprintf('failed to read %s.json for IntendedFor: %s',fname_out,me.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       continue;
     end
     if ~isequal(mmil_getfield(info,'B0UnwarpApplied',false),true), continue; end
@@ -1646,24 +1756,28 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function write_motion_tsv(fname_motion_txt,fname_data_proc)
+function errmsg = write_motion_tsv(fname_motion_txt,fname_data_proc)
+  errmsg = [];
   if isempty(fname_motion_txt) || ~exist(fname_motion_txt,'file'), return; end
   fname_out = regexprep(fname_data_proc,'_desc-preproc_(bold|epi)\.nii\.gz$','_desc-motion_timeseries.tsv');
   if strcmp(fname_out,fname_data_proc)
-    fprintf('%s: WARNING: could not determine motion TSV path from %s\n',mfilename,fname_data_proc);
+    errmsg = sprintf('could not determine motion TSV path from %s',fname_data_proc);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   col_names = {'t_indx','rot_z','rot_x','rot_y','trans_z','trans_x','trans_y'};
   fid_in = fopen(fname_motion_txt,'rt');
   if fid_in < 0
-    fprintf('%s: WARNING: failed to open motion file %s\n',mfilename,fname_motion_txt);
+    errmsg = sprintf('failed to open motion file %s',fname_motion_txt);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   data = textscan(fid_in,'%f %f %f %f %f %f %f %f %f');
   fclose(fid_in);
   fid_out = fopen(fname_out,'wt');
   if fid_out < 0
-    fprintf('%s: WARNING: failed to open %s for writing\n',mfilename,fname_out);
+    errmsg = sprintf('failed to open %s for writing',fname_out);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   fprintf(fid_out,'%s\n',strjoin(col_names,'\t'));
@@ -1690,7 +1804,7 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,outfix,parms)
+function errmsg = export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,outfix,parms)
   % export the B0 displacement field for one forward/reverse pair, in mm and
   %   in the reference field map's frame at output resolution
   % NOTE: B0dx (topup's field times the readout time) is in voxels of its
@@ -1698,6 +1812,7 @@ function export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,outfix,p
   %   differ by vendor
   % NOTE: not smoothed; topup's warp resolution already band-limits it in mm
 
+  errmsg = [];
   % set output file names
   fname_out = set_b0dx_fname(fstem_for,fstem_rev,parms);
   fname_out_json = regexprep(fname_out,'\.nii\.gz$','.json');
@@ -1711,22 +1826,25 @@ function export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,outfix,p
   % determine phase-encode axis of the field's own grid
   pe_axis = get_pe_axis(for_info);
   if isempty(pe_axis)
-    fprintf('%s: WARNING: skipping B0dx export for %s because the phase-encode axis could not be determined\n',...
-      mfilename,fstem_for);
+    errmsg = sprintf('skipping B0dx export for %s because the phase-encode axis could not be determined',...
+      fstem_for);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
 
   % between-scan motion correction matrix for the forward field map scan
   fname_motion = sprintf('%s/%s_%s_motion_inter.mat',tmpdir_for,fstem_for,outfix);
   if ~exist(fname_motion,'file')
-    fprintf('%s: WARNING: skipping B0dx export for %s because %s was not found\n',...
-      mfilename,fstem_for,fname_motion);
+    errmsg = sprintf('skipping B0dx export for %s because %s was not found',...
+      fstem_for,fname_motion);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   tmp = load(fname_motion,'M_motion');
   if ~isfield(tmp,'M_motion') || isempty(tmp.M_motion)
-    fprintf('%s: WARNING: skipping B0dx export for %s because %s contains no M_motion\n',...
-      mfilename,fstem_for,fname_motion);
+    errmsg = sprintf('skipping B0dx export for %s because %s contains no M_motion',...
+      fstem_for,fname_motion);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   M_motion = tmp.M_motion{1};
@@ -1734,8 +1852,9 @@ function export_b0dx(fname_B0dx,fstem_for,fstem_rev,tmpdir_for,for_info,outfix,p
   % reference field map scan defines the output frame
   fname_ref = mmil_getfield(parms,'fname_fmap_for_ref',[]);
   if isempty(fname_ref) || ~exist(fname_ref,'file')
-    fprintf('%s: WARNING: skipping B0dx export for %s because the reference field map is missing\n',...
-      mfilename,fstem_for);
+    errmsg = sprintf('skipping B0dx export for %s because the reference field map is missing',...
+      fstem_for);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   [M_ref,volsz_ref] = mmil_load_mgh_info(fname_ref,parms.forceflag,tmpdir_for);

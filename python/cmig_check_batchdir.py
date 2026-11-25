@@ -18,7 +18,8 @@ as warnings.
 Created:  09/08/2026 by Don Hagler
 Prev mod: 09/11/2026 by Don Hagler
 Prev mod: 11/04/2026 by Don Hagler
-Last mod: 11/10/2026 by Don Hagler
+Prev mod: 11/10/2026 by Don Hagler
+Last mod: 11/22/2026 by Don Hagler
 """
 
 import argparse
@@ -324,21 +325,33 @@ def read_file(path):
 
 
 def read_scriptlist(batchdir):
-    """Job names the batch was supposed to run, from the master scriptlist.
+    """(job name, cluster) pairs the batch was supposed to run.
 
-    A multi-cluster run also leaves scriptlist_batch<N>_<clust>.txt subsets
-    beside the master, but the master holds every job, so only it is read.
+    The master scriptlist.txt holds every job (a multi-cluster mkjobs run
+    also leaves scriptlist_batch<N>_<clust>.txt subsets beside it), and its
+    cluster is ''. Without it, the rounds' scriptlist_<cluster>.txt files
+    are read, one per cluster, and the cluster comes from the file name.
     """
     path = os.path.join(batchdir, 'scriptlist.txt')
-    if not os.path.isfile(path):
-        print(f'WARNING: scriptlist not found: {path}', file=sys.stderr)
+    if os.path.isfile(path):
+        paths = [(path, '')]
+    else:
+        paths = []
+        entries = os.listdir(batchdir) if os.path.isdir(batchdir) else []
+        for entry in sorted(entries):
+            match = re.match(r'^scriptlist_(.+)\.txt$', entry)
+            if match and match.group(1) in clu.CLUSTER_SCHEDULERS:
+                paths.append((os.path.join(batchdir, entry), match.group(1)))
+    if not paths:
+        print(f'WARNING: scriptlist not found in {batchdir}', file=sys.stderr)
         return []
-    jobs = []
-    for line in read_file(path).splitlines():
-        name = line.strip()
-        if name:
-            jobs.append(name)
-    return jobs
+    jobs = collections.OrderedDict()
+    for path, cluster in paths:
+        for line in read_file(path).splitlines():
+            name = line.strip()
+            if name:
+                jobs[name] = cluster
+    return sorted(jobs.items()) if len(paths) > 1 else list(jobs.items())
 
 
 def resolve_job_files(pbsout_dir, job_name, entries):
@@ -1237,7 +1250,7 @@ def account_jobs(batchdir):
 
     has_markers = markers_present(pbsout_dir)
     records = []
-    for job_name in read_scriptlist(batchdir):
+    for job_name, list_cluster in read_scriptlist(batchdir):
         out_path, err_path = resolve_job_files(pbsout_dir, job_name, entries)
         err_text = read_file(err_path) if err_path else ''
         state = job_state(pbsout_dir, job_name, out_path, err_path,
@@ -1256,7 +1269,9 @@ def account_jobs(batchdir):
             'basis': basis,
             'host': header.get('HOSTNAME', ''),
             'jobid': header.get('JOB_ID', ''),
-            'cluster': clu.cluster_from_host(header.get('HOSTNAME')) or '',
+            # the host's cluster, else the scriptlist's
+            'cluster': (clu.cluster_from_host(header.get('HOSTNAME'))
+                        or list_cluster),
             'usage': None,
         })
     return records

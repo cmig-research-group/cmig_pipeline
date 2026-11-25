@@ -27,8 +27,11 @@ python regex searched in the errmsg) and merged into the catalog:
                       days old; never pruned
 
 Classes: not_processed (a refusal, fixed by the inputs), missing_input,
-failure, file_read, infrastructure, warning (errcode 0 with an errmsg) and
-unknown (no rule matched). Successful steps are not recorded.
+failure, file_read, infrastructure, resource (out of memory, disk full,
+quota, I/O error, stale file handle), warning (errcode 0 with an errmsg) and
+unknown (no rule matched). Successful steps are not recorded. The rounds
+(cmig_run_bids_rounds.py) retry a session whose status errmsg matches a
+resource rule, even with errcode 0 (class_regex).
 
 Sessions come from one or more mkjobs batchdirs (--batchdir: scriptlist.txt,
 the job scripts for the script name, roots and options, and pbsout/ for the
@@ -45,7 +48,8 @@ Usage:
       --script_name cmig_pipeline_bids --raw_rootdir ... --proc_rootdir ...
 
 Created:  11/06/2026 by Don Hagler
-Last mod: 11/06/2026 by Don Hagler
+Prev mod: 11/06/2026 by Don Hagler
+Last mod: 11/20/2026 by Don Hagler
 """
 
 import argparse
@@ -72,7 +76,7 @@ HISTORY_DAYS = 7
 HISTORY_TABLES = ['errors_log', 'errors_current']
 
 CLASSES = ['not_processed', 'missing_input', 'failure', 'file_read',
-           'infrastructure', 'warning', 'unknown']
+           'infrastructure', 'resource', 'warning', 'unknown']
 
 # the errmsg of a missing status file, by why it is missing; the rules class
 #   them (mi_not_run, in_lost)
@@ -112,7 +116,7 @@ DESCRIPTIONS = {
                    'replaced, or the MATLAB error signature of a crash; '
                    'the grouping key',
     'error_class': 'not_processed, missing_input, failure, file_read, '
-                   'infrastructure, warning or unknown',
+                   'infrastructure, resource, warning or unknown',
     'error_rule': 'rule_id of the rule that set error_class',
     'err_signature': 'MATLAB error identifier and innermost frame in the .err',
     'source': 'status (a status file), err (the job\'s .err, no status file) '
@@ -178,6 +182,16 @@ def load_rules(fname=None):
             row['regex'] = re.compile(row['pattern'], re.MULTILINE)
             rules.append(row)
     return rules
+
+
+def class_regex(rules, error_class, rule_ids=None):
+    """One compiled regex joining the patterns of the rules of a class (or
+    of those of rule_ids), or None where there are none."""
+    pats = [r['pattern'] for r in rules if r['error_class'] == error_class and
+            (rule_ids is None or r['rule_id'] in rule_ids)]
+    if not pats:
+        return None
+    return re.compile('|'.join('(?:{0})'.format(p) for p in pats), re.MULTILINE)
 
 
 def classify(errmsg, module, rules, errcode=None):

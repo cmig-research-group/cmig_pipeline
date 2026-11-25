@@ -10,7 +10,8 @@ Public function
 ---------------
 compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
                     sublist=None, seslist=None, id_events_file=None,
-                    series_outdir=None, forceflag=False, verbose=True)
+                    series_outdir=None, tables='all', forceflag=False,
+                    verbose=True)
 
   With id_events_file, an id_events release csv, only the visits it lists
   (its participant_id and session_id columns) are compiled.
@@ -66,16 +67,27 @@ compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
   The series and per-reviewer tables are written to series_outdir, default
   outdir.
 
+  tables selects the tables written: 'session' only the session-level ones
+  (into outdir), 'series' only the series-level and per-reviewer ones (into
+  series_outdir), 'all' (default) both. Every file is still read; a table
+  of the other kind is neither written nor reported, nor are its conflicts
+  counted.
+
   Each table is written with the release's column order first and new
   columns after, rows sorted by participant_id and session_id (and
   filename). Values are written as read, less the quoting and padding of
   the MATLAB-written TSVs. A column two files give different values for is
   a conflict: the first value is kept and errcode is set.
 
-  Writes <outdir>/compile_tabdat_report.txt: series_outdir, when not
-  outdir; per table, its rows, the release columns present and missing, and
-  the new columns; the columns no rule could place; every conflict; and,
-  with id_events_file, the visits under the rootdirs that it does not list.
+  Writes <outdir>/compile_tabdat_report.txt: the tables requested;
+  series_outdir, when not outdir; per table, its rows, the release columns
+  present and missing, and the new columns; the columns no rule could
+  place; every conflict; and, with id_events_file, the visits under the
+  rootdirs that it does not list.
+
+  A file listed but gone when it is read (removed by a module rerun on the
+  session while the compile runs) is skipped with a warning and listed in
+  the report; the other read errors stop the compile.
 
   Returns (written, errcode, errmsg), where written maps each table name to
   its output path.
@@ -88,7 +100,9 @@ Prev mod: 11/04/2026 by Don Hagler
 Prev mod: 11/06/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
 Prev mod: 11/13/2026 by Don Hagler
-Last mod: 11/15/2026 by Don Hagler
+Prev mod: 11/15/2026 by Don Hagler
+Prev mod: 11/18/2026 by Don Hagler
+Last mod: 11/21/2026 by Don Hagler
 """
 from __future__ import print_function
 import argparse
@@ -108,6 +122,8 @@ NEW_TABLES = ['mr_y_qc__raw__fmri']
 KEYS = ['participant_id', 'session_id']
 SERIES_KEY = 'filename'
 REPORT_NAME = 'compile_tabdat_report.txt'
+# the tables argument: which kind of table is written
+TABLE_CHOICES = ['all', 'session', 'series']
 NA = 'n/a'
 EMPTY = ('', NA)
 
@@ -412,7 +428,8 @@ class Tables(object):
 
 def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
                         sublist=None, seslist=None, id_events_file=None,
-                        series_outdir=None, forceflag=False, verbose=True):
+                        series_outdir=None, tables='all', forceflag=False,
+                        verbose=True):
     """Compile per-session TSVs into one TSV per table.
 
     Parameters
@@ -432,6 +449,9 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
     series_outdir : str, optional
         Output directory of the series and per-reviewer tables, created if
         absent; default outdir.
+    tables : str
+        'all' (default), 'session' (only the session-level tables) or
+        'series' (only the series-level and per-reviewer tables).
     forceflag : bool
         Overwrite an existing <outdir>/<table>.tsv (or
         <series_outdir>/<table>.tsv).
@@ -445,6 +465,11 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
     errmsg : str
     """
     written = {}
+    if tables not in TABLE_CHOICES:
+        return written, 1, 'tables must be one of {}: {}'.format(
+            ', '.join(TABLE_CHOICES), tables)
+    # the kind of table requested (tables below is the compiled Tables)
+    kind = tables
     if isinstance(rootdirs, str):
         rootdirs = [rootdirs]
     for rootdir in rootdirs:
@@ -473,6 +498,7 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
     candidates = set() # tables of their own, files no json lists
     unplaced = {}      # col -> first file
     skipped = []       # (fname, reason)
+    vanished = []      # files listed but gone when read
     series_tables = {} # series and per-reviewer tables -> key columns
     nfiles = 0
 
@@ -481,7 +507,15 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
                                    left_out)
         _msg(verbose, '{} tsv files under {}'.format(len(files), rootdir))
         for pid, sid, fname in files:
-            header, body = read_tsv(fname)
+            try:
+                header, body = read_tsv(fname)
+            except FileNotFoundError:
+                # removed after it was listed, e.g. a raw QC rerun's
+                #   errors.tsv, which the module removes when all scans pass
+                vanished.append(fname)
+                print('{}: WARNING: {} no longer exists, skipped'.format(
+                    SCRIPTNAME, fname))
+                continue
             if not header or not body:
                 skipped.append((fname, 'empty'))
                 continue
@@ -583,13 +617,20 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
         _msg(verbose, '{} visits not in {}, left out'.format(
             len(left_out), id_events_file))
     _msg(verbose, '{} files read, {} tables'.format(nfiles, len(tables.rows)))
+    if vanished:
+        print('{}: WARNING: {} files gone when read, skipped'.format(
+            SCRIPTNAME, len(vanished)))
     if not series_outdir:
         series_outdir = outdir
+    # the tables requested, of the kind tables names
+    wanted = sorted(t for t in tables.rows
+                    if kind in ('all', 'series' if t in series_tables
+                                else 'session'))
     os.makedirs(outdir, exist_ok=True)
-    if series_tables:
+    if any(t in series_tables for t in wanted):
         os.makedirs(series_outdir, exist_ok=True)
     report = []
-    for table in sorted(tables.rows):
+    for table in wanted:
         tdir = series_outdir if table in series_tables else outdir
         path = os.path.join(tdir, table + '.tsv')
         keys = series_tables.get(table, KEYS)
@@ -614,31 +655,43 @@ def compile_bids_tabdat(rootdirs, outdir, phenotype_dir,
                                 [row.get(c) or NA for c in cols + new])
         written[table] = path
 
+    # the conflicts and unplaced (session-level) columns of the tables
+    #   requested
+    wanted_set = set(wanted)
+    conflicts = [c for c in tables.conflicts if c[0] in wanted_set]
+    if kind == 'series':
+        unplaced = {}
     write_report(os.path.join(outdir, REPORT_NAME), rootdirs, nfiles, report,
-                 unplaced, skipped, tables.conflicts, id_events_file,
-                 left_out, series_outdir if series_outdir != outdir else None)
+                 unplaced, skipped, conflicts, id_events_file,
+                 left_out, series_outdir if series_outdir != outdir else None,
+                 kind, vanished)
     _msg(verbose, 'wrote {} tables and {}'.format(len(written), REPORT_NAME))
     errcode = 0
     errmsg = ''
-    if tables.conflicts:
+    if conflicts:
         errcode = 1
         errmsg = '{} conflicting values; see {}'.format(
-            len(tables.conflicts), REPORT_NAME)
+            len(conflicts), REPORT_NAME)
     return written, errcode, errmsg
 
 
 def write_report(path, rootdirs, nfiles, report, unplaced, skipped,
                  conflicts, id_events_file=None, left_out=None,
-                 series_outdir=None):
+                 series_outdir=None, kind='all', vanished=None):
     with open(path, 'w') as fid:
         fid.write('{} report\n'.format(SCRIPTNAME))
         for rootdir in rootdirs:
             fid.write('  root {}\n'.format(rootdir))
         if id_events_file:
             fid.write('  id_events {}\n'.format(id_events_file))
-        if series_outdir:
+        fid.write('  tables {}\n'.format(
+            {'all': 'all (session, series and per-reviewer)',
+             'session': 'session (session-level only)',
+             'series': 'series (series-level and per-reviewer only)'}[kind]))
+        if series_outdir and kind != 'session':
             fid.write('  series tables in {}\n'.format(series_outdir))
-        fid.write('  {} files, {} tables\n\n'.format(nfiles, len(report)))
+        fid.write('  {} files, {} tables\n'.format(nfiles, len(report)))
+        fid.write('  {} files gone when read\n\n'.format(len(vanished or [])))
         fid.write('{:<60s} {:>6s} {:>9s} {:>8s} {:>5s}\n'.format(
             'table', 'rows', 'release', 'missing', 'new'))
         for table, nrows, npresent, nrelease, missing, new in report:
@@ -658,6 +711,10 @@ def write_report(path, rootdirs, nfiles, report, unplaced, skipped,
         fid.write('\nFILES SKIPPED ({})\n'.format(len(skipped)))
         for fname, reason in skipped:
             fid.write('  {}\t{}\n'.format(fname, reason))
+        fid.write('\nFILES GONE WHEN READ, SKIPPED ({})\n'.format(
+            len(vanished or [])))
+        for fname in vanished or []:
+            fid.write('  {}\n'.format(fname))
         fid.write('\nCONFLICTING VALUES ({})\n'.format(len(conflicts)))
         for table, key, col, old, val, fname in conflicts:
             fid.write('  {}\t{}\t{}\tkept {}\tother {}\t{}\n'.format(
@@ -692,6 +749,11 @@ def build_parser():
                         help='Output directory of the series-level tables, '
                              '<...>__series, and the manual QC per-reviewer '
                              'tables, <...>__review (default: --outdir)')
+    parser.add_argument('--tables', default='all', choices=TABLE_CHOICES,
+                        help='Tables to write: session, the session-level '
+                             'tables (into --outdir); series, the '
+                             'series-level and per-reviewer tables (into '
+                             '--series_outdir); all, both (default: all)')
     parser.add_argument('--forceflag', type=int, default=0, choices=[0, 1],
                         help='Overwrite existing tables (default: 0)')
     parser.add_argument('--verbose', type=int, default=1, choices=[0, 1],
@@ -708,7 +770,8 @@ def run(args):
         args.rootdirs, args.outdir, phenotype_dir=args.phenotype_dir,
         sublist=args.sublist, seslist=args.seslist,
         id_events_file=args.id_events_file,
-        series_outdir=args.series_outdir, forceflag=bool(args.forceflag),
+        series_outdir=args.series_outdir, tables=args.tables,
+        forceflag=bool(args.forceflag),
         verbose=bool(args.verbose))
     if errcode:
         print('{}: ERROR: {}'.format(SCRIPTNAME, errmsg), file=sys.stderr)

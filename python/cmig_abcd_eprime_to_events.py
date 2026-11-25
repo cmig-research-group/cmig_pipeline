@@ -55,7 +55,8 @@ Prev mod: 10/01/2026 by Don Hagler
 Prev mod: 10/05/2026 by Don Hagler
 Prev mod: 10/21/2026 by Don Hagler
 Prev mod: 10/31/2026 by Don Hagler
-Last mod: 11/01/2026 by Don Hagler
+Prev mod: 11/01/2026 by Don Hagler
+Last mod: 11/18/2026 by Don Hagler
 """
 from __future__ import print_function
 import codecs
@@ -891,7 +892,7 @@ def process_mid(df, outstem, scanner_type, behavioral_only,
         n_valid = run_df['money'].notna().sum()
         if n_valid == 0:
             if verbose:
-                print('process_mid: run {} has 0 valid trials — skipping'.format(r + run_offset))
+                print('process_mid: run {} has 0 valid trials - skipping'.format(r + run_offset))
             continue
 
         # the E-Prime run, not a count of the runs kept, so a skipped run

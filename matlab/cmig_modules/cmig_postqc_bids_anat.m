@@ -53,7 +53,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_anat(participant_id,session_
 % Prev Mod: 10/05/2026 by Don Hagler
 % Prev Mod: 10/22/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -74,7 +75,8 @@ end
 [parms,procflag] = check_output(parms);
 
 if procflag
-  [series_qcstruct,t1w_session,t2w_session,errcode,errmsg] = qc_anat(parms);
+  [series_qcstruct,t1w_session,t2w_session,errcode,tmp_errmsg] = qc_anat(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if ~errcode
     combined_row = make_anat_combined_row(t1w_session,t2w_session,...
       parms.participant_id,parms.session_id);
@@ -96,8 +98,11 @@ end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-postqc',errcode,errmsg,parms.status_extra,startdate,procflag);
 
 outdir = parms.outdir;
@@ -253,7 +258,7 @@ function [series_qcstruct,t1w_session,t2w_session,errcode,errmsg] = qc_anat(parm
 
   nonempty_msgs = errmsgs(~cellfun(@isempty,errmsgs));
   if ~isempty(nonempty_msgs)
-    errmsg = strtrim(sprintf('%s ',nonempty_msgs{:}));
+    errmsg = strjoin(nonempty_msgs,'; ');
   end
   if all(errcodes), errcode = 1; end
 return;
@@ -273,7 +278,8 @@ function [auto_qcinfo,errcode,errmsg] = qc_smri_scan(fname,scantype,fname_info,p
   if errcode, return; end
 
   if strcmp(scantype,'T2w') && ~isempty(parms.fnames_t1w)
-    [auto_qcinfo,errcode,errmsg] = check_regT1_t2w(auto_qcinfo,fname,parms);
+    [auto_qcinfo,errcode,tmp_errmsg] = check_regT1_t2w(auto_qcinfo,fname,parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
   end
 return;
@@ -407,7 +413,9 @@ function [auto_qcinfo,errcode,errmsg] = check_regT1_t2w(auto_qcinfo,fname_t2w,pa
         'contrast','t2','tmpdir',parms.tmpdir,...
         'verbose',parms.verbose,'forceflag',parms.forceflag);
       if ec
-        fprintf('%s: WARNING: no boundary cost for %s: %s\n',mfilename,checkname,em);
+        tmp_errmsg = sprintf('no boundary cost for %s: %s',checkname,em);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     end
 
@@ -425,8 +433,10 @@ function [auto_qcinfo,errcode,errmsg] = check_regT1_t2w(auto_qcinfo,fname_t2w,pa
     % without a CC mask, whole-volume correlations are not comparable to
     %   the CC-masked values, so record NaN metrics instead
     if isempty(fname_mask) || ~exist(fname_mask,'file')
-      fprintf('%s: WARNING: no CC mask for %s, setting regT1 metrics to NaN\n',...
-        mfilename,checkname);
+      tmp_errmsg = sprintf('no CC mask for %s, setting regT1 metrics to NaN',checkname);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      % without a recon there is no CC mask by design (FreeSurfer is optional)
+      if ~isempty(parms.fspath), errmsg = cmig_append_errmsg(errmsg,tmp_errmsg); end
       regT1_corr = NaN; regT1_norm = NaN; regT1_warp = NaN; results = [];
       save(fname_out,'regT1_corr','regT1_norm','regT1_warp','regT1_cost0','results');
     else
@@ -446,8 +456,9 @@ function [auto_qcinfo,errcode,errmsg] = check_regT1_t2w(auto_qcinfo,fname_t2w,pa
         if parms.verbose, toc; end
         save(fname_out,'regT1_corr','regT1_norm','regT1_warp','regT1_cost0','results');
       catch me
-        errmsg = sprintf('mmil_check_regT1 failed for T2w: %s',me.message);
-        fprintf('%s: ERROR: %s\n',mfilename,errmsg);
+        tmp_errmsg = sprintf('mmil_check_regT1 failed for T2w: %s',me.message);
+        fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         errcode = 1;
         return;
       end

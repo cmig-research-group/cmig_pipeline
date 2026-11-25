@@ -3,6 +3,103 @@
 Release notes for the CMIG BIDS pipeline, one section per version (X.Y.Z,
 with its release date), newest first, added to as changes are made.
 
+## 1.0.2 - 2026-11-25
+
+Includes the changes of 1.0.1 (cmig_pipeline_dev only, host scripts,
+2026-11-18).
+
+- Post QC selection: the prediction layer (--predict_flag, default 1): a
+  model per modality trained on the release 7.0 manual post QC, from the
+  automatic post QC, raw QC __ok_, motion and Mahalanobis predictors
+  (parms/autoqc_predictors.tsv, cmig_autoqc_predictors.py); rows above
+  --predict_pthr are selected; the model and its scores are saved each round.
+  Options --predictor_file, --predict_pthr, --predict_scanner_flag,
+  --predict_max_frac_nan, --predict_n_draws, --predict_min_n (50) and
+  --predict_min_nfail (5).
+- cmig_autoqc_mahal.py: release 8.0 families, including a task correlation
+  family per task; references fit on 10 random column draws (at most one
+  column per 10 reference sessions), the distance the median over draws.
+- Task fMRI motion (mr_y_qc__mot): a session mean FD over the frames the task
+  model was fit to, __mot__fdsub__09_mean; and the censored and direction
+  motion columns written for the tasks as for rest (57 new variables).
+- cmig_check_batchdir.py: reads the per-cluster scriptlist_<cluster>.txt
+  files the rounds write (it found no jobs in their batchdirs).
+- run.py: group-level --manual_rawqc_dir and --manual_postqc_dir (default
+  output_dir/cmig_manual_rawqc and cmig_manual_postqc, where they exist), as
+  further roots of the tabulated compile; without --work_dir, SCRATCHROOT and
+  MCR_CACHE_ROOT default per account (/tmp/cmig_<user>, .../mcr_cache) where
+  unset or /tmp, so accounts no longer share one MATLAB Runtime cache.
+- cmig_compile_bids_tabdat.py: --tables all|session|series.
+- Rounds: job types (job_types in config.json: several pipelines from one
+  run directory, each with its script, options, prefix, clusters, memory and
+  CPUs); a retry at a higher memory limit after a job runs out of memory
+  (retry_mem_factor); jobs.tsv gains job_type, oom and clustmem; ssh runs
+  with no stdin; the submit log counts the jobs that got an id. SGE jobs
+  with more than one CPU are submitted with -pe smp and -binding linear,
+  with h_vmem per slot.
+- Manual post QC selection: --tabulated_dir (manufacturer and model from
+  the compiled mr_y_adm__info) replaces --qcinfo_file; no site column;
+  --max_rows (a cap per modality, ranked by priority, ties by a seeded draw;
+  --prev_selected_file keeps the rows still open); --filter
+  new|old|any|pass|fail (default new).
+- Protocol compliance: the image type is read from ImageTypeText where the
+  sidecar has it (Siemens XA), else ImageType.
+- Manual raw QC copy: --session_file.
+- E-Prime conversion: an ASCII-only print (no crash in an ASCII locale).
+- Error handling: every caught failure a module tolerates is appended to
+  the status errmsg (no message overwritten or only logged); a resource
+  error (out of memory, I/O, disk full, quota, stale file handle) sets
+  errcode 1 even when other scans or analyses succeeded, so the job is
+  rerun (with more memory after out of memory); a step that throws in
+  analyze_func, and a missing or unreadable sphere map in the dMRI surface
+  concat, now give errcode 1 with the message.
+- Raw QC pipeline: errcode 1 when any modality fails (every modality still
+  runs); mkjobs knows the per-modality raw QC status files, so a retry
+  removes only the failed modality's outputs.
+- Error catalog: a resource class (rules rs_memory, rs_disk, rs_io); the
+  rounds raise the memory limit when a failed step's errmsg reports out of
+  memory, not only when the scheduler does.
+- Post QC fmap: dmri__fm__ap__pa__diff_rms is filled, from the AP dwi field
+  map's first frame and the first b=0 frame of the processed PA dwi (proc
+  dwi keeps no PA field map).
+- Post QC selection: Python ports of the MMPS autoqc code, not yet used
+  by the selection: cmig_autoqc_select.py (the multivariate path of
+  autoqc_select_all.m; a model saved as JSON) and cmig_autoqc_mahal.py
+  (autoqc_mahal.m with a saved reference); both match current MATLAB.
+- cmig_autoqc_select.py, changed from the MATLAB: the score's histogram
+  gate is replaced by a check that the Gaussian score can be formed (else
+  the robust z, scaled by the SD where the MAD is 0); missing values stay
+  unscored; the fallback median and MAD ignore missing values; only the
+  training rows' labels fit the score; a perfectly separated fit is
+  rejected with its own status.
+- Raw QC (pcqc): ok and comp versions of the measures added in release 8.0,
+  159 session columns: brain SNR (every series type), the auto__line
+  measures and pepolar MI (dMRI and fMRI, ok and comp), and the overall FOV
+  cutoff (ok max); their means divide by the scans that have the measure.
+- Siemens XA rawdata: fs_load_mgh reads uint16 (MRI_USHRT) volumes and
+  errors on an unknown data type; proc_func no longer crashes, without a
+  status, on these sessions' field maps and bold.
+- proc_func: a failed import, header read or field map header check gives
+  errcode 1 and a status with the message (the import message shortened to
+  its first line and mri_convert's error lines).
+- Rounds: a job that ran and reported failure but left no status counts as
+  failed (retried, then held), not lost.
+- Tabulated compile: a file removed while the compile runs is skipped and
+  listed in the report.
+- Refusals: "not processed: " prefix on every run shorter than min_numTRs,
+  task block durations that differ across runs, no processed fmap EPI data,
+  and dMRI gradient directions rotated beyond the limit; the error rules
+  class these messages as not_processed (held at once).
+- Rounds: a job adopted from the queue gets a submit_date (the adoption
+  time), and a done row with neither submit_date nor checked_date is
+  compared with rawdata by its state_date, so reopen_changed reopens it when
+  its rawdata change (213 adopted done rows were never reopened).
+- Post QC fmap and func: every diff_rms (the AP-PA difference of the field
+  maps, and each scan's difference from the inter-scan mean) is relative
+  to the mean intensity in its mask, so scanners with different raw
+  intensity scales are comparable (raw values were ~10x higher on Philips
+  and Siemens XA).
+
 ## 1.0.0 - 2026-11-16
 
 The first public release (cmig_pipeline).

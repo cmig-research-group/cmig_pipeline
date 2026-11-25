@@ -14,7 +14,8 @@ Prev mod: 10/08/2026 by Don Hagler
 Prev mod: 11/06/2026 by Don Hagler
 Prev mod: 11/09/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
-Last mod: 11/15/2026 by Don Hagler
+Prev mod: 11/15/2026 by Don Hagler
+Last mod: 11/20/2026 by Don Hagler
 """
 
 import argparse
@@ -64,10 +65,25 @@ FMRI_AUTOQC_TLIST = [
     'dtr__xdir_fwhm', 'dtr__ydir_fwhm', 'dtr__zdir_fwhm',
     'snr_mean', 'snr_med', 'snr_std',
 ]
+# the measures added for 8.0, averaged over the scans that carry them, as
+#   cmig_rawqc_bids averages them; the release 7.0 set above divides by the
+#   number of scans, a scan without the measure counting as 0
+SNR_AUTOQC_TLIST = ['intensity__brain_snr']
+EPI_AUTOQC_TLIST = [
+    'auto__line__score_max', 'auto__line__score_mean',
+    'auto__line__count_max', 'auto__line__count_mean',
+    'auto__line__nframe_count',
+    'auto__line__fft__score_max', 'auto__line__fft__score_mean',
+    'auto__line__fft__nslice_max', 'auto__line__fft__nslice_mean',
+    'auto__line__fft__extent_prop', 'auto__line__fft__nframe_count',
+    'pepolar__for_mi', 'pepolar__rev_mi', 'pepolar__diff_mi',
+]
+CARRIER_MEAN_TLIST = SNR_AUTOQC_TLIST + EPI_AUTOQC_TLIST
 FMRI_SUBTHRESH_TLIST = ['fdsub__02_sum', 'fdsub__02__nody_sum',
                         'fdsub__02__filt_sum', 'fdsub__02__filt__nody_sum']
 # the FOV cutoffs of the dMRI and fMRI scans, taken as a max over the ok scans
-FOV_MAX_TLIST = ['fov__cutoff__dorsal_max', 'fov__cutoff__ventral_max']
+FOV_MAX_TLIST = ['fov__cutoff__dorsal_max', 'fov__cutoff__ventral_max',
+                 'fov__cutoff_max']
 
 # the artifacts each modality scores. Motion is rated for the 3D structural
 # scans and estimated from the data elsewhere, where it shows as a line
@@ -434,7 +450,8 @@ def init_scan_info():
         scan_info[issue] = 0
         scan_info['fm_' + issue] = 0
     all_autoqc = list(dict.fromkeys(
-        COMMON_AUTOQC_TLIST + SMRI_AUTOQC_TLIST + DMRI_AUTOQC_TLIST + FMRI_AUTOQC_TLIST))
+        COMMON_AUTOQC_TLIST + SMRI_AUTOQC_TLIST + DMRI_AUTOQC_TLIST +
+        FMRI_AUTOQC_TLIST + CARRIER_MEAN_TLIST))
     for t in all_autoqc:
         m = t.lower()
         scan_info[m] = 0
@@ -461,11 +478,13 @@ def qu_issues(stype):
 def autoqc_tlist(stype):
     """The autoQC measures check_event reads for a series type."""
     if stype in SMRI_STYPES:
-        return COMMON_AUTOQC_TLIST + SMRI_AUTOQC_TLIST
+        return COMMON_AUTOQC_TLIST + SMRI_AUTOQC_TLIST + SNR_AUTOQC_TLIST
     if stype in DMRI_STYPES:
-        return COMMON_AUTOQC_TLIST + DMRI_AUTOQC_TLIST
+        return (COMMON_AUTOQC_TLIST + DMRI_AUTOQC_TLIST + SNR_AUTOQC_TLIST +
+                EPI_AUTOQC_TLIST)
     if stype in FMRI_STYPES:
-        return COMMON_AUTOQC_TLIST + FMRI_AUTOQC_TLIST
+        return (COMMON_AUTOQC_TLIST + FMRI_AUTOQC_TLIST + SNR_AUTOQC_TLIST +
+                EPI_AUTOQC_TLIST)
     return []
 
 
@@ -896,12 +915,16 @@ def check_event_autoqc(event_info, scan_info, stype, qcd=1):
         # the mean over every scan is cmig_rawqc_bids's, needing only the
         # automated QC; no scan carrying the measure leaves a mean empty
         # rather than 0, the accumulator having stayed at its initial zero
+        n_ok, n_comp = scan_info['ok_ser'], scan_info['comp_ser']
+        if t in CARRIER_MEAN_TLIST:
+            n_ok = scan_info.get('n_ok_' + m_tag, 0)
+            n_comp = scan_info.get('n_comp_' + m_tag, 0)
         event_info['iqc_{0}_ok_{1}'.format(stype, m_tag)] = \
-            (scan_info['ok_' + m_tag] / scan_info['ok_ser']
-             if scan_info['ok_ser'] and scan_info.get('n_ok_' + m_tag) else None)
+            (scan_info['ok_' + m_tag] / n_ok
+             if n_ok and scan_info.get('n_ok_' + m_tag) else None)
         event_info['iqc_{0}_comp_{1}'.format(stype, m_tag)] = \
-            (scan_info['comp_' + m_tag] / scan_info['comp_ser']
-             if scan_info['comp_ser'] and scan_info.get('n_comp_' + m_tag) else None)
+            (scan_info['comp_' + m_tag] / n_comp
+             if n_comp and scan_info.get('n_comp_' + m_tag) else None)
 
     for t in fov_max_tlist(stype):
         if scan_info['total_ser']:

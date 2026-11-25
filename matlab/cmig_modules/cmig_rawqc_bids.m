@@ -96,7 +96,8 @@ function [outdir,errcode,errmsg] = cmig_rawqc_bids(participant_id,session_id,inp
 % Prev Mod: 10/23/2026 by Don Hagler
 % Prev Mod: 11/06/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -142,6 +143,8 @@ stypes = get_bids_stypes(parms.fnames_data);
 
 all_qcstruct = {};
 failed_scans = {};
+scan_warnings = {};
+resource_flag = 0;
 for s=1:length(stypes)
   stype = stypes{s};
 
@@ -176,6 +179,8 @@ for s=1:length(stypes)
       catch me
         scan_errmsg = sprintf('%s: %s',fstem,me.message);
         fprintf('%s: ERROR: %s\n',mfilename,scan_errmsg);
+        % a resource error fails the modality, even if other scans succeed
+        if cmig_is_resource_error(me), resource_flag = 1; end
       end
     else
       tmp = load(fname_qcinfo_mat,'auto_qcinfo');
@@ -183,6 +188,13 @@ for s=1:length(stypes)
     end
     if ~isempty(auto_qcinfo) && tparms.export_flag
       export_image(fname,stype,tparms,auto_qcinfo);
+    end
+    % failures caught inside a scan that still got its row
+    if ~isempty(auto_qcinfo)
+      tmp_errmsg = mmil_getfield(auto_qcinfo,'errmsg',[]);
+      if ~isempty(tmp_errmsg)
+        scan_warnings{end+1} = sprintf('%s: %s',fstem,tmp_errmsg);
+      end
     end
     if ~isempty(auto_qcinfo)
       qcs = convert_qcinfo(auto_qcinfo,tparms.thresholds,parms.participant_id,parms.session_id);
@@ -226,10 +238,14 @@ end
 
 % record per-scan failures; job fails outright only if no scan succeeded
 [errcode,errmsg] = record_scan_errors(failed_scans,all_qcstruct,parms);
+if resource_flag, errcode = 1; end
+for i=1:length(scan_warnings)
+  errmsg = cmig_append_errmsg(errmsg,scan_warnings{i});
+end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
 
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-rawqc',errcode,errmsg,[],startdate,procflag);
@@ -573,8 +589,12 @@ return;
 function auto_qcinfo = init_auto_qcinfo(fname,fname_mgh,stype,parms)
   auto_qcinfo.stype = stype;
   auto_qcinfo.fstem = get_fstem(fname);
-  auto_qcinfo.scaninfo = get_scaninfo(fname,stype,parms);
-  auto_qcinfo.seriesinfo = get_seriesinfo(fname,parms);
+  % messages of failures caught within the scan, reported in the status
+  auto_qcinfo.errmsg = [];
+  [auto_qcinfo.scaninfo,tmp_errmsg] = get_scaninfo(fname,stype,parms);
+  auto_qcinfo.errmsg = cmig_append_errmsg(auto_qcinfo.errmsg,tmp_errmsg);
+  [auto_qcinfo.seriesinfo,tmp_errmsg] = get_seriesinfo(fname,parms);
+  auto_qcinfo.errmsg = cmig_append_errmsg(auto_qcinfo.errmsg,tmp_errmsg);
   auto_qcinfo.imginfo = get_imginfo(fname_mgh,parms);
 return;
 
@@ -669,9 +689,12 @@ function auto_qcinfo = check_dMRI(fname,stype,parms)
   auto_qcinfo.brain_SNR = calc_brain_SNR(fname_mgh,fname_brainmask,parms);
   auto_qcinfo = check_pepolar(fname,fname_mgh,fname_brainmask,auto_qcinfo,parms);
   old_ndirs = size(auto_qcinfo.scaninfo.qmat,1);
-  [auto_qcinfo.scaninfo.qmat,errcode] = ...
+  [auto_qcinfo.scaninfo.qmat,errcode,tmp_errmsg] = ...
     check_qmat(auto_qcinfo.scaninfo.qmat,auto_qcinfo.imginfo.nreps);
-  if errcode, return; end
+  if errcode
+    auto_qcinfo.errmsg = cmig_append_errmsg(auto_qcinfo.errmsg,tmp_errmsg);
+    return;
+  end
   % keep bvals consistent with trimmed qmat
   new_ndirs = size(auto_qcinfo.scaninfo.qmat,1);
   if new_ndirs < old_ndirs && ~isempty(auto_qcinfo.scaninfo.bvals)
@@ -682,16 +705,17 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [qmat,errcode] = check_qmat(qmat,nframes)
-  errcode = 0;
+function [qmat,errcode,errmsg] = check_qmat(qmat,nframes)
+  errcode = 0; errmsg = [];
   ndirs = size(qmat,1);
   if nframes == ndirs-1
     fprintf('%s: WARNING: one fewer frame (%d) than directions in qmat (%d)\n',...
       mfilename,nframes,ndirs);
     qmat = qmat(1:nframes,:);
   elseif nframes ~= ndirs
-    fprintf('%s: WARNING: mismatch between frames (%d) and directions in qmat (%d)\n',...
-      mfilename,nframes,ndirs);
+    errmsg = sprintf('mismatch between frames (%d) and directions in qmat (%d), skipping dMRI fit',...
+      nframes,ndirs);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     errcode = 1;
   end
 return;
@@ -745,8 +769,11 @@ function auto_qcinfo = check_pepolar(fname,fname_mgh,fname_brainmask,auto_qcinfo
     auto_qcinfo.pepolar.mi_for  = mi_for;
     auto_qcinfo.pepolar.mi_rev  = mi_rev;
   catch me
+    if cmig_is_resource_error(me), rethrow(me); end
     fprintf('%s: WARNING: pepolar check failed for %s: %s\n',...
       mfilename,get_fstem(fname),me.message);
+    auto_qcinfo.errmsg = cmig_append_errmsg(mmil_getfield(auto_qcinfo,'errmsg',[]),...
+      sprintf('pepolar check failed: %s',me.message));
   end
   pepolar = auto_qcinfo.pepolar;
   save(fname_cache,'pepolar');
@@ -1117,9 +1144,9 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function scaninfo = get_scaninfo(fname,stype,parms)
+function [scaninfo,errmsg] = get_scaninfo(fname,stype,parms)
   % read scan parameters from BIDS JSON sidecar and bvec/bval files
-  scaninfo = [];
+  scaninfo = []; errmsg = [];
   scaninfo.TR   = NaN;
   scaninfo.qmat = [];
   scaninfo.bvals = [];
@@ -1137,8 +1164,10 @@ function scaninfo = get_scaninfo(fname,stype,parms)
     try
       json = jsondecode(fileread(fname_json));
     catch me
-      fprintf('%s: WARNING: failed to read JSON %s: %s\n',...
-        mfilename,fname_json,me.message);
+      if cmig_is_resource_error(me), rethrow(me); end
+      tmp_errmsg = sprintf('failed to read JSON %s: %s',fname_json,me.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
   % TR: JSON RepetitionTime is in seconds; store as ms for backward compat
@@ -1161,17 +1190,19 @@ function scaninfo = get_scaninfo(fname,stype,parms)
         scaninfo.bval = 0;
       end
     catch me
-      fprintf('%s: WARNING: failed to load bvec/bval for %s: %s\n',...
-        mfilename,fname,me.message);
+      if cmig_is_resource_error(me), rethrow(me); end
+      tmp_errmsg = sprintf('failed to load bvec/bval for %s: %s',fname,me.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function seriesinfo = get_seriesinfo(fname,parms)
+function [seriesinfo,errmsg] = get_seriesinfo(fname,parms)
   % read series metadata from BIDS JSON sidecar
-  seriesinfo = [];
+  seriesinfo = []; errmsg = [];
   seriesinfo.StudyDate            = '';
   seriesinfo.StudyInstanceUID     = '';
   seriesinfo.SeriesInstanceUID    = '';
@@ -1183,8 +1214,9 @@ function seriesinfo = get_seriesinfo(fname,parms)
   try
     json = jsondecode(fileread(fname_json));
   catch me
-    fprintf('%s: WARNING: failed to read JSON %s: %s\n',...
-      mfilename,fname_json,me.message);
+    if cmig_is_resource_error(me), rethrow(me); end
+    errmsg = sprintf('failed to read JSON %s: %s',fname_json,me.message);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   seriesinfo.Manufacturer           = mmil_getfield(json,'Manufacturer','');
@@ -1519,8 +1551,9 @@ function auto_qcinfo = check_dMRI_fit(fname,fname_brainmask,auto_qcinfo,parms)
   %   auto_qcinfo without a motion field, discarding a good motion estimate
   %   because a later step failed, which also cost the QC row its motion
   %   columns and export_dMRI its plots
-  [motion,censor,shells,dmri_diff] = ...
+  [motion,censor,shells,dmri_diff,tmp_errmsg] = ...
     compute_dMRI_fit(fname,fname_brainmask,auto_qcinfo,parms);
+  auto_qcinfo.errmsg = cmig_append_errmsg(mmil_getfield(auto_qcinfo,'errmsg',[]),tmp_errmsg);
   auto_qcinfo.motion = motion;
   auto_qcinfo.censor = censor;
   auto_qcinfo.shells = shells;
@@ -1542,9 +1575,9 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [motion,censor,shells,dmri_diff] = ...
+function [motion,censor,shells,dmri_diff,errmsg] = ...
                         compute_dMRI_fit(fname,fname_brainmask,auto_qcinfo,parms)
-  motion = []; censor = []; shells = []; dmri_diff = [];
+  motion = []; censor = []; shells = []; dmri_diff = []; errmsg = [];
   if auto_qcinfo.imginfo.nreps >= parms.dMRI_minTRs
     [fpath,fstem] = cmig_get_fileparts(fname);
     fname_out = sprintf('%s/%s_dMRI_fit.mat',parms.tmpdir,fstem);
@@ -1558,7 +1591,9 @@ function [motion,censor,shells,dmri_diff] = ...
         [motion,censor,fname_mc,fname_qmat] = ...
           calc_dmri_motion(fname,auto_qcinfo.scaninfo,parms);
       catch me
-        fprintf('%s: WARNING: calc_dmri_motion failed: %s\n',mfilename,me.message);
+        if cmig_is_resource_error(me), rethrow(me); end
+        errmsg = sprintf('calc_dmri_motion failed: %s',me.message);
+        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
         return;
       end
       % load raw data, for censoring detection
@@ -1584,8 +1619,9 @@ function [motion,censor,shells,dmri_diff] = ...
       ndirs   = size(data.qmat,1);
       nframes = size(data.vol,4);
       if nframes ~= ndirs
-        fprintf('%s: WARNING: mismatch between number of frames (%d) and directions in qmat (%d)\n',...
-          mfilename,nframes,ndirs);
+        errmsg = sprintf('mismatch between number of frames (%d) and directions in qmat (%d), skipping dMRI fit',...
+          nframes,ndirs);
+        fprintf('%s: WARNING: %s\n',mfilename,errmsg);
         return;
       end
       % RMS difference between raw and corrected data, relative to raw:
@@ -1611,6 +1647,7 @@ function [motion,censor,shells,dmri_diff] = ...
       shells = autoqc_dMRI_shells([],a{:});
       if parms.verbose, toc; end
       if isempty(shells)
+        errmsg = 'dMRI fit calculations failed (autoqc_dMRI_shells returned empty)';
         fprintf('%s: WARNING: dMRI fit calculations failed for %s\n',mfilename,fname);
         return;
       end

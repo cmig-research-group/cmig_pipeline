@@ -60,7 +60,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_dwi(participant_id,session_i
 % Prev Mod: 10/09/2026 by Don Hagler
 % Prev Mod: 10/21/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -81,7 +82,8 @@ end
 [parms,procflag] = check_output(parms);
 
 if procflag
-  [series_qcstruct,session_row,errcode,errmsg] = qc_dwi(parms);
+  [series_qcstruct,session_row,errcode,tmp_errmsg] = qc_dwi(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if ~errcode
     if ~isempty(series_qcstruct)
       fname_series = sprintf('%s/%s_desc-dwi_postqc.tsv',parms.outdir,parms.outstem);
@@ -96,8 +98,11 @@ end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-postqc',errcode,errmsg,parms.status_extra,startdate,procflag);
 
 outdir = parms.outdir;
@@ -222,8 +227,13 @@ function [series_qcstruct,session_row,errcode,errmsg] = qc_dwi(parms)
     end
   end
 
+  for f=1:n
+    errmsg = cmig_append_errmsg(errmsg,errmsgs{f});
+  end
+
   if n > 0
-    [base_session,errcode,errmsg] = calc_dMRI_session_qc(parms);
+    [base_session,errcode,tmp_errmsg] = calc_dMRI_session_qc(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
     if ~isempty(base_session)
       % NOTE: b0_rms is a property of the field map pair, not of the dMRI
@@ -236,10 +246,6 @@ function [series_qcstruct,session_row,errcode,errmsg] = qc_dwi(parms)
     end
   end
 
-  nonempty_msgs = errmsgs(~cellfun(@isempty,errmsgs));
-  if ~isempty(nonempty_msgs)
-    errmsg = strtrim(sprintf('%s ',nonempty_msgs{:}));
-  end
   if all(errcodes), errcode = 1; end
 return;
 
@@ -319,7 +325,8 @@ function [session_row,errcode,errmsg] = calc_dMRI_session_qc(parms)
     'fspath',parms.fspath,'verbose',parms.verbose,'forceflag',parms.forceflag);
   if errcode, return; end
 
-  [qcinfo,errcode,errmsg] = check_dMRI_shells(qcinfo,parms);
+  [qcinfo,errcode,tmp_errmsg] = check_dMRI_shells(qcinfo,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, return; end
 
   session_row = convert_dwi_row(qcinfo,parms.participant_id,parms.session_id);
@@ -345,7 +352,9 @@ function [qcinfo,errcode,errmsg] = check_dMRI_shells(qcinfo,parms)
       fname_bvec = regexprep(fname,'\.nii.*','.bvec');
       fname_bval = regexprep(fname,'\.nii.*','.bval');
       if ~exist(fname_bvec,'file') || ~exist(fname_bval,'file')
-        fprintf('%s: WARNING: bvec/bval not found for %s, skipping\n',mfilename,fname);
+        tmp_errmsg = sprintf('bvec/bval not found for %s, skipping',fname);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       bvec = load(fname_bvec);  % 3xN
@@ -372,8 +381,9 @@ function [qcinfo,errcode,errmsg] = check_dMRI_shells(qcinfo,parms)
     end
 
     if isempty(vol_all)
-      errmsg = sprintf('no DWI volumes loaded, skipping %s',checkname);
-      fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+      tmp_errmsg = sprintf('no DWI volumes loaded, skipping %s',checkname);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       return;
     end
 
@@ -400,8 +410,9 @@ function [qcinfo,errcode,errmsg] = check_dMRI_shells(qcinfo,parms)
     if parms.verbose, toc; end
 
     if isempty(dMRI_shells_metrics)
-      errmsg = sprintf('autoqc_dMRI_shells returned empty, skipping %s',checkname);
-      fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+      tmp_errmsg = sprintf('autoqc_dMRI_shells returned empty, skipping %s',checkname);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       return;
     end
     save(fname_cache,'dMRI_shells_metrics');

@@ -51,36 +51,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_func(participant_id,session_
 %   errmsg: error message string (empty if no error)
 %
 % Created:  05/21/2026 by Don Hagler
-% Prev Mod: 06/10/2026 by Don Hagler
-% Prev Mod: 06/11/2026 by Don Hagler
-% Prev Mod: 06/12/2026 by Don Hagler
-% Prev Mod: 06/15/2026 by Don Hagler
-% Prev Mod: 06/17/2026 by Don Hagler
-% Prev Mod: 06/18/2026 by Don Hagler
-% Prev Mod: 06/22/2026 by Don Hagler
-% Prev Mod: 06/24/2026 by Don Hagler
-% Prev Mod: 06/25/2026 by Don Hagler
-% Prev Mod: 07/09/2026 by Don Hagler
-% Prev Mod: 07/10/2026 by Don Hagler
-% Prev Mod: 07/13/2026 by Don Hagler
-% Prev Mod: 07/22/2026 by Don Hagler
-% Prev Mod: 08/05/2026 by Don Hagler
-% Prev Mod: 08/07/2026 by Don Hagler
-% Prev Mod: 08/11/2026 by Don Hagler
-% Prev Mod: 08/13/2026 by Don Hagler
-% Prev Mod: 08/27/2026 by Don Hagler
-% Prev Mod: 09/09/2026 by Don Hagler
-% Prev Mod: 09/24/2026 by Don Hagler
-% Prev Mod: 09/29/2026 by Don Hagler
-% Prev Mod: 10/01/2026 by Don Hagler
-% Prev Mod: 10/05/2026 by Don Hagler
-% Prev Mod: 10/20/2026 by Don Hagler
-% Prev Mod: 10/21/2026 by Don Hagler
-% Prev Mod: 10/22/2026 by Don Hagler
-% Prev Mod: 11/11/2026 by Don Hagler
-% Prev Mod: 11/12/2026 by Don Hagler
-% Prev Mod: 11/13/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/20/2026 by Don Hagler
+% Last Mod: 11/25/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -101,7 +73,8 @@ end
 [parms,procflag] = check_output(parms);
 
 if procflag
-  [series_qcstruct,session_row,errcode,errmsg] = qc_func(parms);
+  [series_qcstruct,session_row,errcode,tmp_errmsg] = qc_func(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if ~errcode
     if ~isempty(series_qcstruct)
       fname_series = sprintf('%s/%s_desc-bold_postqc.tsv',parms.outdir,parms.outstem);
@@ -116,8 +89,11 @@ end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,'desc-postqc',errcode,errmsg,parms.status_extra,startdate,procflag);
 
 outdir = parms.outdir;
@@ -247,8 +223,9 @@ function [series_qcstruct,merged_session,errcode,errmsg] = qc_func(parms)
   stdev_row = []; scan_rms_vals = nan(n,1); fname_brain = [];
   scan_corr_vals = nan(n,1); scan_com_dists = nan(n,1);
   if n > 0
-    [stdev_row,scan_rms_vals,scan_corr_vals,scan_com_dists,fname_brain,errcode,errmsg] = ...
+    [stdev_row,scan_rms_vals,scan_corr_vals,scan_com_dists,fname_brain,errcode,tmp_errmsg] = ...
       calc_fMRI_stdev(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
   end
 
@@ -265,7 +242,8 @@ function [series_qcstruct,merged_session,errcode,errmsg] = qc_func(parms)
 
   cutoff_row = [];
   if n > 0
-    [cutoff_row,errcode,errmsg] = calc_fMRI_session_qc(parms);
+    [cutoff_row,errcode,tmp_errmsg] = calc_fMRI_session_qc(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
   end
 
@@ -280,7 +258,8 @@ function [series_qcstruct,merged_session,errcode,errmsg] = qc_func(parms)
   % spatial smoothness of each processed run, two arms: the processed image
   % itself (unmarked, no detrending, comparable to the raw QC value) and its
   % detrended residual (__dtr__, comparable to the raw QC detrended value)
-  [fwhm_proc,fwhm_dt] = calc_func_fwhm(parms,fname_brain);
+  [fwhm_proc,fwhm_dt,tmp_errmsg] = calc_func_fwhm(parms,fname_brain);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   axes_names = {'x','y','z'};
   for k=1:length(series_qcstruct)
     f = scan_indices(k);
@@ -308,8 +287,8 @@ function [series_qcstruct,merged_session,errcode,errmsg] = qc_func(parms)
     fmap_fallback_indicator);
 
   nonempty_msgs = errmsgs(~cellfun(@isempty,errmsgs));
-  if ~isempty(nonempty_msgs)
-    errmsg = strtrim(sprintf('%s ',nonempty_msgs{:}));
+  for k=1:length(nonempty_msgs)
+    errmsg = cmig_append_errmsg(errmsg,nonempty_msgs{k});
   end
   if all(errcodes), errcode = 1; end
 return;
@@ -505,12 +484,15 @@ function [stdev_row,scan_rms_vals,scan_corr_vals,scan_com_dists,fname_brain,errc
           'M_reg',M_T1_to_EPI,'interpm',2,'bclamp',1);
         fs_save_nifti(vol_res,fname_mean_norm_res,M_res);
       catch me
-        fprintf('%s: WARNING: failed to resample normalized interscan mean to T1w space: %s\n',...
-          mfilename,me.message);
+        tmp_errmsg = sprintf('failed to resample normalized interscan mean to T1w space: %s',...
+          me.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       end
     else
-      fprintf('%s: WARNING: M_T1_to_EPI not found in proc JSON; normalized interscan mean not resampled to T1w space\n',...
-        mfilename);
+      tmp_errmsg = 'M_T1_to_EPI not found in proc JSON, normalized interscan mean not resampled to T1w space';
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
   if exist(fname_mean_norm_res,'file') && ~isempty(parms.fnames_t1w)
@@ -555,16 +537,18 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [fwhm_proc,fwhm_dt] = calc_func_fwhm(parms,fname_brain)
+function [fwhm_proc,fwhm_dt,errmsg] = calc_func_fwhm(parms,fname_brain)
   % FWHM per processed run, twice: undetrended (the processed image itself) and
   % detrended (its residual). Both use the SynthStrip mask mmil_intrascan_stdev
   % built from the interscan mean, so the two arms and all runs share one mask.
   % outstem keeps the two arms from colliding, since cmig_3dFWHM would
   % otherwise name both from the same input file stem
   n = length(parms.fnames_func);
-  fwhm_proc = nan(n,3); fwhm_dt = nan(n,3);
+  fwhm_proc = nan(n,3); fwhm_dt = nan(n,3); errmsg = [];
+  if n == 0, return; end
   if isempty(fname_brain) || ~exist(fname_brain,'file')
-    fprintf('%s: WARNING: no brain mask, skipping func FWHM\n',mfilename);
+    errmsg = 'no brain mask, skipping func FWHM';
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   tmpdir = sprintf('%s/func_fwhm',parms.tmpdir);
@@ -579,8 +563,9 @@ function [fwhm_proc,fwhm_dt] = calc_func_fwhm(parms,fname_brain)
           'outstem',sprintf('%s_%s',fstem,arms{a,1}),...
           'detrend_flag',arms{a,2},'verbose',0,'forceflag',parms.forceflag);
       catch me
-        fprintf('%s: WARNING: FWHM (%s) failed for %s: %s\n',...
-          mfilename,arms{a,1},fstem,me.message);
+        tmp_errmsg = sprintf('FWHM (%s) failed for %s: %s',arms{a,1},fstem,me.message);
+        fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+        errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
         continue;
       end
       if strcmp(arms{a,1},'proc')
@@ -879,7 +864,12 @@ function scan_rms_vals = calc_scan_diff_rms(fnamelist_mgz,stdev_outdir,fname_bra
     if ~exist(fname_scan_mean,'file'), continue; end
     vol_scan_mean = fs_load_mgh(fname_scan_mean);
     diff_vol = vol_scan_mean - vol_inter_mean;
-    scan_rms_vals(f) = sqrt(mean(diff_vol(mask).^2));
+    % relative to the inter-scan mean intensity, so scanners with different
+    %   raw intensity scales are comparable
+    mean_int = mean(vol_inter_mean(mask));
+    if mean_int > 0
+      scan_rms_vals(f) = sqrt(mean(diff_vol(mask).^2)) / mean_int;
+    end
   end
 return;
 

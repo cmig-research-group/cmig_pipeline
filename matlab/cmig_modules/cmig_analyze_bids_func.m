@@ -212,7 +212,10 @@ function [outdir,errcode,errmsg] = cmig_analyze_bids_func(participant_id,session
 % Prev Mod: 11/06/2026 by Don Hagler
 % Prev Mod: 11/11/2026 by Don Hagler
 % Prev Mod: 11/12/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/20/2026 by Don Hagler
+% Prev Mod: 11/21/2026 by Don Hagler
+% Last Mod: 11/22/2026 by Don Hagler
 %
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -253,18 +256,21 @@ if procflag
   % notch filter motion estimates for aliased respiration signals
   %   applied here only; downstream mc_resp_flag defaults stay false
   if parms.mc_resp_flag
-    [errcode,errmsg,parms] = filter_motion_tsvs(parms);
+    [errcode,tmp_errmsg,parms] = filter_motion_tsvs(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
   end
 
   % remove the dummy TRs, and pre-normalize voxelwise data to percent signal
   %   change and/or despike; called unconditionally so the dummies come off
   %   even when norm_flag and despike_flag are both 0
-  [errcode,errmsg,parms] = normalize_runs(parms);
+  [errcode,tmp_errmsg,parms] = normalize_runs(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
   % calculate average time series for each ROI for each run
-  [errcode,errmsg,parms] = extract_tseries(parms);
+  [errcode,tmp_errmsg,parms] = extract_tseries(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
   if parms.deconv_flag
@@ -272,11 +278,18 @@ if procflag
     dparms = subset_deconv_runs(parms);
 
     % prepare TR, motion, stim, and GLT files for deconvolution
-    [errcode,errmsg,dparms] = prep_deconv(dparms);
+    [errcode,tmp_errmsg,dparms] = prep_deconv(dparms);
+    if errcode && strncmp(tmp_errmsg,'not processed:',14)
+      % a refusal goes first, where the rounds look for its prefix
+      errmsg = cmig_append_errmsg(tmp_errmsg,errmsg);
+    else
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+    end
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
     % run per-run design deconvolution to produce per-run design matrices
-    [errcode,errmsg,dparms] = prep_design_per_run(dparms);
+    [errcode,tmp_errmsg,dparms] = prep_design_per_run(dparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
     % the concat below indexes the designs by session run, and keeps every run,
@@ -291,21 +304,37 @@ if procflag
   % concatenate ROI time series data across runs
   if parms.roi_flag
     % concatenate combined-atlas ROI time series (gpaseg, dskaseg, dstaseg, gpdstdskaseg)
-    concat_roi_tseries(parms);
+    try
+      concat_roi_tseries(parms);
+    catch me
+      [errcode,errmsg] = step_failed('concat_roi_tseries',me,errmsg,parms,startdate); return;
+    end
     if parms.prep_tseries_flag
-      prep_roi_tseries(parms);
+      try
+        prep_roi_tseries(parms);
+      catch me
+        [errcode,errmsg] = step_failed('prep_roi_tseries',me,errmsg,parms,startdate); return;
+      end
       if ~isempty(parms.trim_ntpoints_list)
-        trim_roi_tseries(parms);
+        try
+          trim_roi_tseries(parms);
+        catch me
+          [errcode,errmsg] = step_failed('trim_roi_tseries',me,errmsg,parms,startdate); return;
+        end
       end
     end
   end
 
   % save vol_info for roi and ico
   if parms.roi_flag
-    cmig_save_vol_info(parms.participant_id,parms.session_id,...
-      'outdir',parms.outdir,...
-      'outstem',parms.outstem,...
-      'forceflag',parms.forceflag);
+    try
+      cmig_save_vol_info(parms.participant_id,parms.session_id,...
+        'outdir',parms.outdir,...
+        'outstem',parms.outstem,...
+        'forceflag',parms.forceflag);
+    catch me
+      [errcode,errmsg] = step_failed('cmig_save_vol_info',me,errmsg,parms,startdate); return;
+    end
   end
   if parms.ico_flag
     % NOTE: a parms field added here, between the two deconv_flag blocks, is
@@ -313,32 +342,56 @@ if procflag
     %   deconvolution works from a run-subset copy taken before this point.
     %   Omitting it fails at the read with Unrecognized field name
     for ico_order = parms.extract_ico_order
-      fname_vol_info = cmig_save_vol_info(parms.participant_id,parms.session_id,...
-        'outdir',parms.outdir,...
-        'outstem',parms.outstem,...
-        'fname_tag',sprintf('atlas-ico%d',ico_order),'ico_order',ico_order,...
-        'forceflag',parms.forceflag);
+      try
+        fname_vol_info = cmig_save_vol_info(parms.participant_id,parms.session_id,...
+          'outdir',parms.outdir,...
+          'outstem',parms.outstem,...
+          'fname_tag',sprintf('atlas-ico%d',ico_order),'ico_order',ico_order,...
+          'forceflag',parms.forceflag);
+      catch me
+        [errcode,errmsg] = step_failed('cmig_save_vol_info',me,errmsg,parms,startdate); return;
+      end
       parms.(sprintf('fname_vol_info_ico%d',ico_order)) = fname_vol_info;
     end
   end
 
   % compute ROI-ROI correlation matrices and write tabulated data
   if parms.roi_flag
-    run_roi_corr(parms);
+    try
+      run_roi_corr(parms);
+    catch me
+      [errcode,errmsg] = step_failed('run_roi_corr',me,errmsg,parms,startdate); return;
+    end
   end
 
   % concatenate ico time series data across runs and compute ico-ico correlations
   if parms.ico_flag
     for ico_order = parms.extract_ico_order
-      parms = concat_ico_tseries(parms,ico_order);
-    end
-    if parms.prep_tseries_flag
-      prep_ico_tseries(parms);
-      if ~isempty(parms.trim_ntpoints_list)
-        trim_ico_tseries(parms);
+      try
+        parms = concat_ico_tseries(parms,ico_order);
+      catch me
+        [errcode,errmsg] = step_failed('concat_ico_tseries',me,errmsg,parms,startdate); return;
       end
     end
-    calc_ico_corr(parms);
+    if parms.prep_tseries_flag
+      try
+        prep_ico_tseries(parms);
+      catch me
+        [errcode,errmsg] = step_failed('prep_ico_tseries',me,errmsg,parms,startdate); return;
+      end
+      if ~isempty(parms.trim_ntpoints_list)
+        try
+          trim_ico_tseries(parms);
+        catch me
+          [errcode,errmsg] = step_failed('trim_ico_tseries',me,errmsg,parms,startdate); return;
+        end
+      end
+    end
+    try
+      calc_ico_corr(parms);
+    catch me
+      [errcode,errmsg] = step_failed('calc_ico_corr',me,errmsg,parms,startdate); return;
+    end
   end
 
   if parms.deconv_flag
@@ -347,16 +400,19 @@ if procflag
     dparms = refresh_deconv_parms(dparms,parms);
 
     % run per-run deconvolution (always, for each run individually)
-    [errcode,errmsg] = run_deconv_per_run(dparms);
+    [errcode,tmp_errmsg] = run_deconv_per_run(dparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
     % run concatenated deconvolution (only if multiple runs)
-    [errcode,errmsg] = run_deconv_concat_runs(dparms);
+    [errcode,tmp_errmsg] = run_deconv_concat_runs(dparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
 
     % with one run there is no concatenated pass, so its outputs are the
     %   session's; copy them to the session stem
-    [errcode,errmsg] = copy_single_run_outputs(dparms);
+    [errcode,tmp_errmsg] = copy_single_run_outputs(dparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate); return; end
   else
     dparms = [];
@@ -364,13 +420,15 @@ if procflag
 
   % write task motion tabdat, with the dof of the 3dDeconvolve fits
   if parms.roi_flag && ~strcmp(parms.task,'rest')
-    write_task_motion_tabdat(parms,dparms);
+    errmsg = cmig_append_errmsg(errmsg,write_task_motion_tabdat(parms,dparms));
   end
 
 end
 
 % cleanup tmpdirs
-if parms.cleanup_flag, errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir); end
+if parms.cleanup_flag
+  errmsg = cmig_append_errmsg(errmsg,cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir));
+end
 
 % write status file
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate,procflag);
@@ -378,6 +436,17 @@ cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('ta
 outdir = parms.outdir;
 fprintf('%s: finished\n',mfilename);
 
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [errcode,errmsg] = step_failed(step,me,errmsg,parms,startdate)
+  % a step with no errcode output threw: record it and write the status
+  errcode = 1;
+  tmp_errmsg = sprintf('%s: %s',step,me.message);
+  fprintf('%s: ERROR: %s\n',mfilename,tmp_errmsg);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+  cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,sprintf('task-%s_desc-analyze',parms.task),errcode,errmsg,parms.status_extra,startdate);
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -852,7 +921,7 @@ function [parms,errcode,errmsg] = drop_short_runs(parms)
   end
   if isempty(ind)
     errcode = 1;
-    errmsg = sprintf('every run has fewer than min_numTRs (%d) frames',parms.min_numTRs);
+    errmsg = sprintf('not processed: every run has fewer than min_numTRs (%d) frames',parms.min_numTRs);
     return;
   end
   run_fields = {'fnames_data','fnames_events','fnames_info','fnames_motion',...
@@ -1407,11 +1476,13 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function write_deconv_tabdat(parms)
+function errmsg = write_deconv_tabdat(parms)
+  errmsg = [];
   % load condnames saved during prep_deconv
   fname_condnames = sprintf('%s/deconv_condnames.mat',parms.tmpdir);
   if ~exist(fname_condnames,'file')
-    fprintf('%s: WARNING: condnames file not found, skipping deconv tabdat\n',mfilename);
+    errmsg = 'condnames file not found, skipping deconv tabdat';
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   tmp = load(fname_condnames,'condnames');
@@ -1421,7 +1492,8 @@ function write_deconv_tabdat(parms)
   % deconv roi mat and run_tag for column names
   [~, col_run_tag, fname_deconv_roi] = deconv_roi_fname(parms);
   if ~exist(fname_deconv_roi,'file')
-    fprintf('%s: WARNING: deconv roi mat not found: %s\n',mfilename,fname_deconv_roi);
+    errmsg = sprintf('deconv roi mat not found: %s',fname_deconv_roi);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
 
@@ -1831,7 +1903,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function write_task_motion_tabdat(parms,dparms)
+function errmsg = write_task_motion_tabdat(parms,dparms)
+  errmsg = [];
   % the dof is that of the ROI fits, per run and over the concatenated runs,
   %   as 3dDeconvolve gives it for the t statistics: the uncensored time
   %   points less the regressors. With one run, the session's is the run's.
@@ -1839,16 +1912,21 @@ function write_task_motion_tabdat(parms,dparms)
   nruns = length(parms.fnames_data);
   dofvec = NaN;
   dofvec_run = nan(1,nruns);
+  deconv_meanfd = [];
   if ~isempty(dparms)
+    [deconv_meanfd,tmp_errmsg] = deconv_motion_stats(dparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     run_numbers = deconv_run_numbers(dparms,length(dparms.fnames_data));
     for r = 1:length(run_numbers)
       fname_info = sprintf('%s/run%02d_roi_deconv_3dDeconv_stats_info.mat',...
         parms.tmpdir,run_numbers(r));
-      dofvec_run(dparms.run_index(r)) = read_deconv_dof(fname_info);
+      [dofvec_run(dparms.run_index(r)),tmp_errmsg] = read_deconv_dof(fname_info);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
     if length(run_numbers) > 1
-      dofvec = read_deconv_dof(sprintf('%s/roi_deconv_3dDeconv_stats_info.mat',...
+      [dofvec,tmp_errmsg] = read_deconv_dof(sprintf('%s/roi_deconv_3dDeconv_stats_info.mat',...
         parms.tmpdir));
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     else
       dofvec = dofvec_run(dparms.run_index(1));
     end
@@ -1859,17 +1937,52 @@ function write_task_motion_tabdat(parms,dparms)
     'task',parms.task,'colstem',sprintf('mr_y_qc__mot__tfmri__%s',parms.task),...
     'participant_id',parms.participant_id,'session_id',parms.session_id,...
     'dofvec',dofvec,'dofvec_run',dofvec_run,...
+    'deconv_meanfd',deconv_meanfd,...
     'forceflag',parms.forceflag);
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function dof = read_deconv_dof(fname_info)
+function [meanfd,errmsg] = deconv_motion_stats(parms)
+  % mean framewise displacement over the frames the session's fit
+  %   kept: its runs (an events file, >= min_numTRs frames), without the
+  %   dummy TRs, uncensored in fname_censor (FD < censor_thresh_deconv). FD
+  %   is computed per run, as for the per-run columns, so each run's first
+  %   frame (FD 0 by definition) is left out
+  meanfd = NaN; errmsg = [];
+  if isempty(parms.fname_censor) || ~exist(parms.fname_censor,'file')
+    errmsg = sprintf('deconv censor file not found: %s',parms.fname_censor);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+    return;
+  end
+  kept = load(parms.fname_censor);
+  fd = []; mask = [];
+  for r = 1:length(parms.fnames_motion_1d)
+    tmp = load(parms.fnames_motion_1d{r});
+    if size(tmp,2) > 6, tmp = tmp(:,2:7); end
+    [~,tfd] = mmil_censor_motion(tmp,parms.censor_thresh_deconv,parms.contig_thresh);
+    fd = cat(1,fd,tfd(:));
+    mask = cat(1,mask,[false;true(length(tfd)-1,1)]);
+  end
+  if length(kept) ~= length(fd)
+    errmsg = sprintf('deconv censor file %s has %d frames, the motion %d',...
+      parms.fname_censor,length(kept),length(fd));
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
+    return;
+  end
+  ind = find(mask & kept(:) ~= 0);
+  if isempty(ind), return; end
+  meanfd = mean(fd(ind));
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [dof,errmsg] = read_deconv_dof(fname_info)
   % the largest t statistic dof, as the old pipeline took it
-  dof = NaN;
+  dof = NaN; errmsg = [];
   if ~exist(fname_info,'file')
-    fprintf('%s: WARNING: deconv stats info file not found: %s\n',...
-      mfilename,fname_info);
+    errmsg = sprintf('deconv stats info file not found: %s',fname_info);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   tmp = load(fname_info,'stats_info');
@@ -2678,14 +2791,16 @@ function [errcode,errmsg] = run_deconv_per_run(parms)
     [rparms.glt_fnames,rparms.glt_labels] = create_glt_files(glt_outstem,1,parms,rparms.fname_motion);
 
     % run per-run design deconvolution (nodata_nt computed from single-run mgz)
-    [errcode,errmsg,rparms] = run_deconv_design(rparms);
+    [errcode,tmp_errmsg,rparms] = run_deconv_design(rparms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
 
     if parms.roi_flag
-      [errcode,errmsg] = run_deconv_roi(rparms);
+      [errcode,tmp_errmsg] = run_deconv_roi(rparms);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if errcode, return; end
-      postnorm_deconv_roi(rparms);
-      write_deconv_tabdat(rparms);
+      errmsg = cmig_append_errmsg(errmsg,postnorm_deconv_roi(rparms));
+      errmsg = cmig_append_errmsg(errmsg,write_deconv_tabdat(rparms));
       cmig_write_tabdat_tfmri_fstat('indir',rparms.tmpdir,...
         'instem','roi_deconv_3dDeconv_norm',...
         'outdir',rparms.outdir,...
@@ -2696,15 +2811,19 @@ function [errcode,errmsg] = run_deconv_per_run(parms)
 
     end
     if parms.ico_flag
-      [errcode,errmsg] = run_deconv_ico(rparms);
+      [errcode,tmp_errmsg] = run_deconv_ico(rparms);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if errcode, return; end
-      [errcode,errmsg] = concat_tfmri_stats(rparms);
+      [errcode,tmp_errmsg] = concat_tfmri_stats(rparms);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if errcode, return; end
-      [errcode,errmsg] = convert_tfmri_stats(rparms);
+      [errcode,tmp_errmsg] = convert_tfmri_stats(rparms);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if errcode, return; end
     end
     if parms.vox_flag
-      [errcode,errmsg] = run_deconv_vox(rparms);
+      [errcode,tmp_errmsg] = run_deconv_vox(rparms);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
       if errcode, return; end
     end
   end
@@ -2777,7 +2896,7 @@ function [errcode,errmsg] = copy_single_run_outputs(parms)
         return;
       end
     end
-    write_deconv_tabdat(sparms);
+    errmsg = cmig_append_errmsg(errmsg,write_deconv_tabdat(sparms));
     cmig_write_tabdat_tfmri_fstat('indir',sparms.tmpdir,...
       'instem','roi_deconv_3dDeconv_norm',...
       'outdir',sparms.outdir,...
@@ -2795,10 +2914,11 @@ function [errcode,errmsg] = run_deconv_concat_runs(parms)
 
   if parms.roi_flag
     % run roi deconvolution on concatenated data
-    [errcode,errmsg] = run_deconv_roi(parms);
+    [errcode,tmp_errmsg] = run_deconv_roi(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
-    postnorm_deconv_roi(parms);
-    write_deconv_tabdat(parms);
+    errmsg = cmig_append_errmsg(errmsg,postnorm_deconv_roi(parms));
+    errmsg = cmig_append_errmsg(errmsg,write_deconv_tabdat(parms));
     cmig_write_tabdat_tfmri_fstat('indir',parms.tmpdir,...
       'instem','roi_deconv_3dDeconv_norm',...
       'outdir',parms.outdir,...
@@ -2810,21 +2930,25 @@ function [errcode,errmsg] = run_deconv_concat_runs(parms)
 
   if parms.ico_flag
     % run ico surface deconvolution on concatenated data
-    [errcode,errmsg] = run_deconv_ico(parms);
+    [errcode,tmp_errmsg] = run_deconv_ico(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
 
     % concatenate ico surface stats across runs
-    [errcode,errmsg] = concat_tfmri_stats(parms);
+    [errcode,tmp_errmsg] = concat_tfmri_stats(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
 
     % convert ico surface stats to GIfTI format
-    [errcode,errmsg] = convert_tfmri_stats(parms);
+    [errcode,tmp_errmsg] = convert_tfmri_stats(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
   end
 
   if parms.vox_flag
     % run voxelwise deconvolution on concatenated data
-    [errcode,errmsg] = run_deconv_vox(parms);
+    [errcode,tmp_errmsg] = run_deconv_vox(parms);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     if errcode, return; end
   end
 return;
@@ -3157,7 +3281,7 @@ function [stim_fnames,stim_fnames_per_run,nevents_by_run_cond,errcode,errmsg] = 
         durs = durs(~isnan(durs));
         if length(durs) > 1 && std(durs) >= parms.max_dur_std
           errcode = 1;
-          errmsg = sprintf(['%s block durations differ across runs (%s s):',...
+          errmsg = sprintf(['not processed: %s block durations differ across runs (%s s):',...
             ' std %0.2f s >= %g s'],stim_labels{c},...
             strtrim(sprintf('%0.2f ',durs)),std(durs),parms.max_dur_std);
           fprintf('%s: ERROR: %s\n',mfilename,errmsg);
@@ -3457,7 +3581,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function postnorm_deconv_roi(parms)
+function errmsg = postnorm_deconv_roi(parms)
+  errmsg = [];
   % the slice below is unconditional, since the readers of the output assume
   %   it; post-normalizing (baseline_flag) and censoring (outliers_flag) are
   %   what the flags gate
@@ -3503,8 +3628,9 @@ function postnorm_deconv_roi(parms)
       vol(baseline==0,2:end) = NaN;
       fprintf('%s: applied baseline post-normalization to roi deconv mat\n',mfilename);
     else
-      fprintf('%s: WARNING: baseline file not found, roi deconv not post-normalized: %s\n',...
-        mfilename,fname_baseline);
+      errmsg = sprintf('baseline file not found, roi deconv not post-normalized: %s',...
+        fname_baseline);
+      fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     end
   end
 

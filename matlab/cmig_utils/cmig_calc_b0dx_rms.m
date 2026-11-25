@@ -1,5 +1,5 @@
-function [b0_rms,b0_rms_vals,fnames_B0dx] = cmig_calc_b0dx_rms(proc_rootdir,participant_id,session_id,acq_type,tmpdir,varargin)
-%function [b0_rms,b0_rms_vals,fnames_B0dx] = cmig_calc_b0dx_rms(proc_rootdir,participant_id,session_id,acq_type,tmpdir,[options])
+function [b0_rms,b0_rms_vals,fnames_B0dx,errmsg] = cmig_calc_b0dx_rms(proc_rootdir,participant_id,session_id,acq_type,tmpdir,varargin)
+%function [b0_rms,b0_rms_vals,fnames_B0dx,errmsg] = cmig_calc_b0dx_rms(proc_rootdir,participant_id,session_id,acq_type,tmpdir,[options])
 %
 % Purpose: compute RMS of B0 unwarp displacement field(s) for a session
 %
@@ -40,13 +40,15 @@ function [b0_rms,b0_rms_vals,fnames_B0dx] = cmig_calc_b0dx_rms(proc_rootdir,part
 %     file was found, none could be read, or the brain mask was empty
 %   b0_rms_vals: vector of per-pair RMS values, one per B0dx file
 %   fnames_B0dx: cell array of B0dx file names, matching b0_rms_vals
+%   errmsg: messages of B0dx files that could not be read (empty if none)
 %
 % Created:  07/10/2026 by Don Hagler
 % Prev Mod: 07/10/2026 by Don Hagler
-% Last Mod: 08/05/2026 by Don Hagler
+% Prev Mod: 08/05/2026 by Don Hagler
+% Last Mod: 11/20/2026 by Don Hagler
 %
 
-b0_rms = NaN; b0_rms_vals = []; fnames_B0dx = {};
+b0_rms = NaN; b0_rms_vals = []; fnames_B0dx = {}; errmsg = [];
 if ~mmil_check_nargs(nargin,5), return; end
 
 parms = mmil_args2parms(varargin,{...
@@ -103,8 +105,9 @@ if ~exist(fname_out,'file') || parms.forceflag
     try
       vol = cmig_read_nifti(fnames_B0dx{k});
     catch me
-      fprintf('%s: WARNING: cmig_read_nifti failed for %s: %s\n',...
-        mfilename,dlist(k).name,me.message);
+      tmp_errmsg = sprintf('cmig_read_nifti failed for %s: %s',dlist(k).name,me.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
     if isempty(vol), continue; end
     if ndims(vol) > 3, vol = vol(:,:,:,1); end

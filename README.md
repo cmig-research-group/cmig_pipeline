@@ -1,16 +1,33 @@
-# cmig_pipeline_dev
+# cmig_pipeline
 
-Development repository of the CMIG BIDS pipeline: MATLAB modules and python
-wrappers that process and analyze BIDS-formatted MRI data (sMRI, task and
-resting-state fMRI, dMRI), one participant and session at a time, and the
-Dockerfile of the CMIG BIDS app image. Private. Each release is copied to the
-public cmig_pipeline repository, with the compiled executable as its release
-asset.
+The CMIG BIDS pipeline: MATLAB modules and python wrappers that process and
+analyze BIDS-formatted MRI data (sMRI, task and resting-state fMRI, dMRI), one
+participant and session at a time, and combine the results across sessions.
+It runs as a container image, the CMIG BIDS app, which holds the compiled
+modules and every program they use.
+
+## Getting the image
+
+Each release has a Docker image on the GitHub Container Registry:
+
+    docker pull ghcr.io/cmig-research-group/cmig_pipeline:<version>
+
+For Singularity/Apptainer, build a .sif from it:
+
+    singularity build cmig_pipeline-<version>.sif docker://ghcr.io/cmig-research-group/cmig_pipeline:<version>
+
+The image can also be built from a clone at a release tag with
+`docker/Dockerfile`, which downloads the compiled executable (the release
+asset) and the other components by tag and checksum.
+
+How to run the image, its pipelines and modules, inputs, outputs and output
+names: `docker/documentation/README.txt` (also in the image, in
+/documentation). A FreeSurfer license file is needed (free from
+https://surfer.nmr.mgh.harvard.edu/registration.html).
 
 ## Contents
 
-- `matlab/` the MATLAB modules (`cmig_modules/`) and the functions they use,
-  in the subdirectories they have in MMPS
+- `matlab/` the MATLAB modules (`cmig_modules/`) and the functions they use
 - `python/` the module wrapper (`cmig_run_bids_module.py`), the pipelines
   (`cmig_pipeline_bids.py`, `cmig_pipeline_bids_rawqc.py`), the other module
   scripts, the job and build scripts, and tools; python 3.6
@@ -21,23 +38,16 @@ asset.
 - `lib/` those libraries, with their licenses in `lib/licenses/`
 - `csh/` `run_matlab_script`, which runs the MATLAB code (not compiled)
 - `docker/` the Dockerfile, its files, and the documentation and license
-  files the image holds (`docker/documentation/README.txt` describes using
-  the image)
-
-## Dependencies
-
-- surface_morphometry_toolbox (private): MATLAB functions compiled into the
-  executable
-- gradient_distortion_fields: the gradient nonlinearity distortion fields
-  and `gradient_distortion_files.m`
-- the brain atlases, a release asset
-- FreeSurfer, FSL, AFNI and the MATLAB Runtime, which the image installs at
-  pinned versions
+  files the image holds
 
 ## Releases
 
-Versions are X.Y.Z. Release notes are kept in `CHANGELOG.md`, one section per
-version, added to as changes are made.
+Versions are X.Y.Z; release notes are in `CHANGELOG.md`. Each release's
+compiled executable (`cmig_run_bids_module_<version>.tar.gz`) is a release
+asset; the brain atlases are a release asset of the release that changed
+them (`docker/Dockerfile` names the one it uses). The executable includes MATLAB functions from a
+private toolbox, so the modules here cannot be compiled from this repository
+alone; the release asset is the compiled form.
 
 ## License
 

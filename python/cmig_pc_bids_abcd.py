@@ -13,7 +13,9 @@ Prev mod: 10/05/2026 by Don Hagler
 Prev mod: 10/08/2026 by Don Hagler
 Prev mod: 10/19/2026 by Don Hagler
 Prev mod: 11/11/2026 by Don Hagler
-Last mod: 11/15/2026 by Don Hagler
+Prev mod: 11/15/2026 by Don Hagler
+Prev mod: 11/18/2026 by Don Hagler
+Last mod: 11/20/2026 by Don Hagler
 """
 
 import argparse
@@ -309,8 +311,9 @@ def get_bids_scans(participant_id, session_id, raw_rootdir, verbose=False):
             # JSON sidecar has the same path as the NIfTI with .json extension
             json_path = re.sub(r'\.nii(\.gz)?$', '.json', nii_path)
             if not os.path.isfile(json_path):
-                print('{0}: WARNING: no JSON sidecar found for {1}'.format(
-                    APPNAME, nii_path))
+                msg = 'no JSON sidecar found for {0}'.format(nii_path)
+                print('{0}: WARNING: {1}'.format(APPNAME, msg))
+                append_errmsg(msg)
                 json_path = None
 
             # parse BIDS filename entities for use in series identification
@@ -333,6 +336,42 @@ def get_bids_scans(participant_id, session_id, raw_rootdir, verbose=False):
     return scans
 
 #############################################################################
+# Caught failures
+#############################################################################
+
+# messages of the failures caught during a run, joined into the status errmsg
+# with errcode unchanged unless one was a resource error; reset by run()
+_caught_errmsgs = []
+_caught_resource = []
+
+# errno of an OSError that is a resource failure, not a data problem: EIO,
+#   ENOSPC, ESTALE, EDQUOT
+RESOURCE_ERRNOS = (5, 28, 116, 122)
+
+
+def is_resource_error(err):
+    """True for a MemoryError, or an OSError for an I/O error, no space left
+    on device, a stale file handle or disk quota exceeded."""
+    return isinstance(err, MemoryError) or (
+        isinstance(err, OSError) and err.errno in RESOURCE_ERRNOS)
+
+
+def append_errmsg(msg, err=None):
+    """Record a caught failure's message for the status errmsg; a resource
+    error (is_resource_error) makes the run's errcode 1."""
+    if msg and msg not in _caught_errmsgs:
+        _caught_errmsgs.append(msg)
+    if err is not None and is_resource_error(err):
+        _caught_resource.append(msg)
+
+
+def join_errmsg(errmsg=''):
+    """Return errmsg followed by the caught failures' messages, joined by '; '."""
+    parts = ([errmsg] if errmsg else []) + _caught_errmsgs
+    return '; '.join(parts)
+
+
+#############################################################################
 # Metadata extraction
 #############################################################################
 
@@ -344,8 +383,9 @@ def load_metadata(json_path):
         with open(json_path, 'r') as fid:
             return json.load(fid)
     except (IOError, ValueError) as err:
-        print('{0}: WARNING: could not read {1}: {2}'.format(
-            APPNAME, json_path, err))
+        msg = 'could not read {0}: {1}'.format(json_path, err)
+        print('{0}: WARNING: {1}'.format(APPNAME, msg))
+        append_errmsg(msg, err)
         return {}
 
 
@@ -366,7 +406,9 @@ def extract_info_fields(meta):
 
 def extract_fields(meta):
     """Extract the BIDS JSON fields needed for compliance checks."""
-    image_type = meta.get('ImageType', '')
+    # Siemens XA (dcm2niix) puts the per-frame value in ImageTypeText and a
+    #   generic one in ImageType; use ImageTypeText wherever it is present
+    image_type = meta.get('ImageTypeText') or meta.get('ImageType', '')
     if isinstance(image_type, list):
         image_type = '\\'.join(image_type)
     return {
@@ -457,7 +499,10 @@ def get_nifti_nvols(nii_path):
     try:
         shape = nib.load(nii_path).shape
         return shape[3] if len(shape) >= 4 else 1
-    except Exception:
+    except Exception as err:
+        msg = 'could not read {0}: {1}'.format(nii_path, err)
+        print('{0}: WARNING: {1}'.format(APPNAME, msg))
+        append_errmsg(msg, err)
         return None
 
 
@@ -1680,6 +1725,8 @@ def run(args):
     sid     = args.session_id
     outdir  = os.path.join(args.output_rootdir, pid, sid)
     startdate = cmig_status.module_start()
+    del _caught_errmsgs[:]
+    del _caught_resource[:]
 
     # skip if prior successful run exists
     if check_prior_status(outdir, pid, sid, args.forceflag):
@@ -1696,7 +1743,7 @@ def run(args):
     # find all NIfTI files and JSON sidecars
     scans = get_bids_scans(pid, sid, args.raw_rootdir, verbose=args.verbose)
     if not scans:
-        errmsg = 'no scans found for {0} {1}'.format(pid, sid)
+        errmsg = join_errmsg('no scans found for {0} {1}'.format(pid, sid))
         write_status(outdir, pid, sid, 1, errmsg, startdate)
         return 1, errmsg
 
@@ -1731,15 +1778,17 @@ def run(args):
     write_pc_tsv(rows, tsv_path)
 
     if not os.path.isfile(tsv_path):
-        errmsg = 'failed to write {0}'.format(tsv_path)
+        errmsg = join_errmsg('failed to write {0}'.format(tsv_path))
         write_status(outdir, pid, sid, 1, errmsg, startdate)
         return 1, errmsg
 
     if args.verbose:
         print('{0}: wrote {1}'.format(APPNAME, tsv_path))
 
-    write_status(outdir, pid, sid, 0, '', startdate)
-    return 0, ''
+    errmsg = join_errmsg()
+    errcode = 1 if _caught_resource else 0
+    write_status(outdir, pid, sid, errcode, errmsg, startdate)
+    return errcode, errmsg
 
 
 def main():

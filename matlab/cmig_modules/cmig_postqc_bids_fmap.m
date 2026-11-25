@@ -3,7 +3,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_fmap(participant_id,session_
 %
 % Purpose: Automated post-processing QC for BIDS fmap derivatives
 %   Computes stdev/tSNR separately for func and dwi fmaps, AP and PA;
-%   calculates AP-PA mean difference and per-scan RMS from inter-scan mean;
+%   calculates AP-PA mean difference and per-scan RMS from inter-scan mean,
+%     each relative to the mean intensity within the brain mask;
 %   calculates per-scan correlation and centre of mass distance to the
 %   other scans of the same direction;
 %   calculates RMS of the B0 unwarp displacement fields (in mm);
@@ -44,26 +45,8 @@ function [outdir,errcode,errmsg] = cmig_postqc_bids_fmap(participant_id,session_
 %   errmsg: error message string (empty if no error)
 %
 % Created:  06/17/2026 by Don Hagler
-% Prev Mod: 06/17/2026 by Don Hagler
-% Prev Mod: 06/18/2026 by Don Hagler
-% Prev Mod: 06/22/2026 by Don Hagler
-% Prev Mod: 06/24/2026 by Don Hagler
-% Prev Mod: 07/09/2026 by Don Hagler
-% Prev Mod: 07/10/2026 by Don Hagler
-% Prev Mod: 07/13/2026 by Don Hagler
-% Prev Mod: 07/22/2026 by Don Hagler
-% Prev Mod: 08/05/2026 by Don Hagler
-% Prev Mod: 08/11/2026 by Don Hagler
-% Prev Mod: 08/13/2026 by Don Hagler
-% Prev Mod: 09/09/2026 by Don Hagler
-% Prev Mod: 09/29/2026 by Don Hagler
-% Prev Mod: 10/01/2026 by Don Hagler
-% Prev Mod: 10/05/2026 by Don Hagler
-% Prev Mod: 10/08/2026 by Don Hagler
-% Prev Mod: 10/22/2026 by Don Hagler
-% Prev Mod: 11/02/2026 by Don Hagler
-% Prev Mod: 11/11/2026 by Don Hagler
-% Last Mod: 11/15/2026 by Don Hagler
+% Prev Mod: 11/21/2026 by Don Hagler
+% Last Mod: 11/25/2026 by Don Hagler
 %
 
 outdir = []; errcode = 0; errmsg = [];
@@ -83,7 +66,8 @@ end
 [parms,procflag] = check_output(parms);
 
 if procflag
-  [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms);
+  [series_qcstruct,session_rows,errcode,tmp_errmsg] = qc_fmap(parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   if ~errcode
     for k=1:length(parms.acq_types)
       acq = parms.acq_types{k};
@@ -102,8 +86,11 @@ end
 
 if parms.cleanup_flag
   cleanup_errmsg = cmig_cleanup_tmpdirs(parms.outdir,parms.tmpdir);
-  if isempty(errmsg), errmsg = cleanup_errmsg; end
+  errmsg = cmig_append_errmsg(errmsg,cleanup_errmsg);
 end
+% a tolerated failure from a resource error (e.g. out of memory) fails the
+%   module, so the job is rerun
+if ~errcode && cmig_is_resource_error(errmsg), errcode = 1; end
 cmig_write_status(parms.participant_id,parms.session_id,parms.outdir,parms.status_module,errcode,errmsg,parms.status_extra,startdate,procflag);
 
 outdir = parms.outdir;
@@ -215,7 +202,7 @@ function [parms,errcode,errmsg] = check_input(parms)
               isempty(parms.fnames_dwi_ap)  && isempty(parms.fnames_dwi_pa);
   if all_empty
     errcode = 1;
-    errmsg  = 'no processed fmap EPI data found for requested acq_types';
+    errmsg  = 'not processed: no processed fmap EPI data found for requested acq_types';
     fprintf('%s: ERROR: %s\n',mfilename,errmsg);
     return;
   end
@@ -322,7 +309,8 @@ function [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms)
     % spatial smoothness of each processed field map, measured with no
     % detrending as the raw field maps are: these are one or a few frames, so
     % there is nothing to detrend
-    fwhm_vals = calc_fmap_fwhm(fnames,label,fname_mask,parms);
+    [fwhm_vals,em] = calc_fmap_fwhm(fnames,label,fname_mask,parms);
+    errmsgs{end+1} = em;
 
     % one series row per field map scan, with its registration to T1w
     if ~isfield(regT1_qcinfos,acq), regT1_qcinfos.(acq) = {}; end
@@ -330,7 +318,8 @@ function [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms)
       row = convert_fmap_series_row(fnames{f},fnames_info{f},...
         acq,dire,scan_rms_vals(f),scan_corr_vals(f),scan_com_dists(f),fwhm_vals(f,:),...
         parms.participant_id,parms.session_id);
-      regT1_qcinfo = check_fmap_regT1(fnames{f},fnames_info{f},parms);
+      [regT1_qcinfo,em] = check_fmap_regT1(fnames{f},fnames_info{f},parms);
+      errmsgs{end+1} = em;
       series_qcstruct{end+1} = add_fmap_regT1_series_cols(row,regT1_qcinfo);
       regT1_qcinfos.(acq){end+1} = regT1_qcinfo;
     end
@@ -356,9 +345,20 @@ function [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms)
 
     % difference between the AP and PA interscan means
     rms_diff = NaN;
-    if isfield(fname_means,label_ap) && isfield(fname_means,label_pa)
-      rms_diff = calc_fmap_AP_PA_diff(...
-        fname_means.(label_ap),fname_means.(label_pa),at,parms);
+    fname_mean_pa = [];
+    if isfield(fname_means,label_pa)
+      fname_mean_pa = fname_means.(label_pa);
+    elseif strcmp(at,'dwi') && isfield(fname_means,label_ap)
+      % proc dwi keeps no PA field map, so PA is the first b0 frame of the
+      %   processed dwi the AP field map is intended for, on its grid
+      [fname_mean_pa,em] = get_dwi_PA_b0(...
+        parms.fnames_dwi_ap{1},parms.fnames_info_dwi_ap{1},fname_means.(label_ap),parms);
+      errmsgs{end+1} = em;
+    end
+    if isfield(fname_means,label_ap) && ~isempty(fname_mean_pa)
+      [rms_diff,em] = calc_fmap_AP_PA_diff(...
+        fname_means.(label_ap),fname_mean_pa,at,parms);
+      errmsgs{end+1} = em;
     end
 
     % RMS of the B0 unwarp displacement fields, within the field map brain
@@ -370,14 +370,19 @@ function [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms)
     elseif isfield(fname_masks,label_ap) && ~isempty(fname_masks.(label_ap))
       fname_mask = fname_masks.(label_ap);
     end
-    [b0_rms,b0_rms_vals,fnames_B0dx] = cmig_calc_b0dx_rms(parms.proc_rootdir,...
+    [b0_rms,b0_rms_vals,fnames_B0dx,em] = cmig_calc_b0dx_rms(parms.proc_rootdir,...
       parms.participant_id,parms.session_id,at,parms.tmpdir,...
       'fname_mask',fname_mask,'verbose',parms.verbose,'forceflag',parms.forceflag);
+    errmsgs{end+1} = em;
 
     % brain cutoff for the field map scans, both
     %   phase-encode directions together
-    [cutoff_qcinfo,errcode,errmsg] = calc_fmap_cutoff(at,parms);
-    if errcode, return; end
+    [cutoff_qcinfo,errcode,em] = calc_fmap_cutoff(at,parms);
+    errmsgs{end+1} = em;
+    if errcode
+      errmsg = strjoin(errmsgs(~cellfun(@isempty,errmsgs)),'; ');
+      return;
+    end
 
     session_rows.(at) = build_fmap_session_row(group_rows,at,rms_diff,b0_rms,...
       parms.participant_id,parms.session_id);
@@ -398,7 +403,7 @@ function [series_qcstruct,session_rows,errcode,errmsg] = qc_fmap(parms)
 
   nonempty_msgs = errmsgs(~cellfun(@isempty,errmsgs));
   if ~isempty(nonempty_msgs)
-    errmsg = strtrim(sprintf('%s ',nonempty_msgs{:}));
+    errmsg = strjoin(nonempty_msgs,'; ');
   end
   if ~isempty(errcodes) && all(errcodes), errcode = 1; end
 return;
@@ -444,7 +449,8 @@ function [stdev_row,scan_rms_vals,scan_corr_vals,scan_com_dists,fname_mean,fname
   fname_mean = sprintf('%s/fmap_interscan_first_mean.mgz',stdev_outdir);
   if ~exist(fname_mean,'file'), fname_mean = []; end
 
-  [mask,fname_mask] = get_fmap_brainmask(fname_mean,parms);
+  [mask,fname_mask,tmp_errmsg] = get_fmap_brainmask(fname_mean,parms);
+  errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
   scan_rms_vals = calc_scan_diff_rms_fmap(fnamelist_mgz,stdev_outdir,mask);
   [scan_corr_vals,scan_com_dists] = calc_scan_alignment_fmap(fnamelist_mgz,stdev_outdir,mask);
   copy_fmap_jpgs(fnamelist_mgz,stdev_outdir,label,parms);
@@ -471,13 +477,14 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function fwhm_vals = calc_fmap_fwhm(fnames,label,fname_mask,parms)
+function [fwhm_vals,errmsg] = calc_fmap_fwhm(fnames,label,fname_mask,parms)
   % FWHM per processed field map scan, no detrending, with the SynthStrip mask
   % built from this direction's interscan mean. outstem keeps the two scans of
   % a pair from colliding when they share the output directory
-  fwhm_vals = nan(length(fnames),3);
+  fwhm_vals = nan(length(fnames),3); errmsg = [];
   if isempty(fname_mask) || ~exist(fname_mask,'file')
-    fprintf('%s: WARNING: no brain mask for %s, skipping FWHM\n',mfilename,label);
+    errmsg = sprintf('no brain mask for %s, skipping FWHM',label);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   % a folder per direction, since cmig_3dFWHM keeps an existing converted mask
@@ -490,15 +497,17 @@ function fwhm_vals = calc_fmap_fwhm(fnames,label,fname_mask,parms)
         'fname_mask',fname_mask,'outdir',tmpdir,'outstem',fstem,...
         'detrend_flag',0,'verbose',0,'forceflag',parms.forceflag);
     catch me
-      fprintf('%s: WARNING: FWHM failed for %s: %s\n',mfilename,fstem,me.message);
+      tmp_errmsg = sprintf('FWHM failed for %s: %s',fstem,me.message);
+      fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+      errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
     end
   end
 return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [mask,fname_mask] = get_fmap_brainmask(fname_mean,parms)
-  mask = []; fname_mask = [];
+function [mask,fname_mask,errmsg] = get_fmap_brainmask(fname_mean,parms)
+  mask = []; fname_mask = []; errmsg = [];
   if isempty(fname_mean) || ~exist(fname_mean,'file'), return; end
   [fdir,fstem,fext] = fileparts(fname_mean);
 
@@ -509,7 +518,8 @@ function [mask,fname_mask] = get_fmap_brainmask(fname_mean,parms)
       'fname_mask',fname_tmp,'outdir',fdir,'binarize_flag',1,...
       'warning_flag',1,'verbose',parms.verbose,'forceflag',parms.forceflag);
   catch me
-    fprintf('%s: WARNING: brain mask creation failed for %s: %s\n',mfilename,fname_mean,me.message);
+    errmsg = sprintf('brain mask creation failed for %s: %s',fname_mean,me.message);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
 
@@ -534,7 +544,11 @@ function scan_rms_vals = calc_scan_diff_rms_fmap(fnamelist_mgz,stdev_outdir,mask
     if ~exist(fname_scan_mean,'file'), continue; end
     vol_scan_mean = fs_load_mgh(fname_scan_mean);
     diff_vol = vol_scan_mean - vol_inter_mean;
-    scan_rms_vals(f) = sqrt(mean(diff_vol(mask).^2));
+    % relative to the inter-scan mean intensity
+    mean_int = mean(vol_inter_mean(mask));
+    if mean_int > 0
+      scan_rms_vals(f) = sqrt(mean(diff_vol(mask).^2)) / mean_int;
+    end
   end
 return;
 
@@ -598,8 +612,8 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function rms_diff = calc_fmap_AP_PA_diff(fname_mean_ap,fname_mean_pa,acq_type,parms)
-  rms_diff = NaN;
+function [rms_diff,errmsg] = calc_fmap_AP_PA_diff(fname_mean_ap,fname_mean_pa,acq_type,parms)
+  rms_diff = NaN; errmsg = [];
   if isempty(fname_mean_ap) || ~exist(fname_mean_ap,'file'), return; end
   if isempty(fname_mean_pa) || ~exist(fname_mean_pa,'file'), return; end
 
@@ -621,8 +635,10 @@ function rms_diff = calc_fmap_AP_PA_diff(fname_mean_ap,fname_mean_pa,acq_type,pa
         'forceflag',parms.forceflag);
     end
 
-    mask_ap = get_fmap_brainmask(fname_mean_ap,parms);
-    mask_pa = get_fmap_brainmask(fname_mean_pa,parms);
+    [mask_ap,~,em] = get_fmap_brainmask(fname_mean_ap,parms);
+    errmsg = cmig_append_errmsg(errmsg,em);
+    [mask_pa,~,em] = get_fmap_brainmask(fname_mean_pa,parms);
+    errmsg = cmig_append_errmsg(errmsg,em);
     if ~isempty(mask_ap) && ~isempty(mask_pa)
       mask = mask_ap & mask_pa;
     elseif ~isempty(mask_ap)
@@ -633,9 +649,69 @@ function rms_diff = calc_fmap_AP_PA_diff(fname_mean_ap,fname_mean_pa,acq_type,pa
       mask = true(size(diff_vol));
     end
 
-    rms_diff = sqrt(mean(diff_vol(mask).^2));
+    % relative to the mean intensity, so scanners with different raw
+    %   intensity scales are comparable
+    mean_int = mean((vol_ap(mask) + vol_pa(mask))/2);
+    if mean_int > 0
+      rms_diff = sqrt(mean(diff_vol(mask).^2)) / mean_int;
+    end
   catch me
-    fprintf('%s: WARNING: AP-PA diff failed for %s: %s\n',mfilename,acq_type,me.message);
+    tmp_errmsg = sprintf('AP-PA diff failed for %s: %s',acq_type,me.message);
+    fprintf('%s: WARNING: %s\n',mfilename,tmp_errmsg);
+    errmsg = cmig_append_errmsg(errmsg,tmp_errmsg);
+  end
+return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [fname_mean,errmsg] = get_dwi_PA_b0(fname_ap,fname_info_ap,fname_mean_ap,parms)
+  % first b=0 frame of the processed PA dwi, as the AP side takes the AP
+  %   field map's first frame: the first IntendedFor entry of the AP field
+  %   map (proc dwi's up run); its grid must match the AP mean's, as nothing
+  %   is resampled
+  fname_mean = []; errmsg = [];
+  try
+    if isempty(fname_info_ap) || ~exist(fname_info_ap,'file')
+      fname_info_ap = regexprep(fname_ap,'\.nii.*','.json');
+    end
+    info = jsondecode(fileread(fname_info_ap));
+    uris = cellstr(mmil_getfield(info,'IntendedFor',{}));
+    if isempty(uris) || isempty(uris{1}) || ~strncmp(uris{1},'bids::',6)
+      error('no IntendedFor in %s',fname_info_ap);
+    end
+    fname_dwi = sprintf('%s/%s',parms.proc_rootdir,uris{1}(7:end));
+    fname_bval = regexprep(fname_dwi,'\.nii.*','.bval');
+    if ~exist(fname_dwi,'file') || ~exist(fname_bval,'file')
+      error('processed dwi or its bval not found: %s',fname_dwi);
+    end
+    info_dwi = jsondecode(fileread(regexprep(fname_dwi,'\.nii.*','.json')));
+    if ~isequal(pe_toward_posterior(info_dwi),false)
+      error('%s is not PA',fname_dwi);
+    end
+    bvals = load(fname_bval);
+    ib0 = find(bvals(:)==0,1);
+    if isempty(ib0), error('no b=0 frame in %s',fname_bval); end
+    [~,M_ap,~,volsz_ap] = fs_load_mgh(fname_mean_ap,[],[],1);
+    [~,M,volsz] = cmig_read_nifti(fname_dwi,1);
+    if ~isequal(volsz(1:3),volsz_ap(1:3)) || max(abs(M(:)-M_ap(:))) > 1e-3
+      error('%s is not on the AP field map grid',fname_dwi);
+    end
+    if parms.verbose
+      fprintf('%s: reading b=0 frame %d of %s...\n',mfilename,ib0,fname_dwi);
+    end
+    % read unscaled to keep the stored class, then scale only the b0 frame
+    [vol,~,~,hdr] = cmig_read_nifti(fname_dwi,0,0);
+    vol = double(vol(:,:,:,ib0));
+    if hdr.scl_slope~=0, vol = vol*hdr.scl_slope + hdr.scl_inter; end
+    [~,fstem] = cmig_get_fileparts(fname_dwi);
+    outdir = sprintf('%s/fmap_dwi_PA_b0',parms.tmpdir);
+    mmil_mkdir(outdir);
+    fname_out = sprintf('%s/%s_b0.mgz',outdir,fstem);
+    fs_save_mgh(vol,fname_out,M);
+    fname_mean = fname_out;
+  catch me
+    errmsg = sprintf('PA dwi b0 failed: %s',me.message);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
   end
 return;
 
@@ -688,11 +764,12 @@ return;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function qcinfo = check_fmap_regT1(fname,fname_info,parms)
+function [qcinfo,errmsg] = check_fmap_regT1(fname,fname_info,parms)
   % registration of one field map to T1w, as MMIL_auto_postQC_Exam checked
   %   the registration reference field map; the field maps are resampled to
   %   the reference's grid and share its RegistrationMatrixT1w
   %   failures are warnings, leaving the regT1 values NaN
+  errmsg = [];
   qcinfo = cmig_init_epi_qcinfo(fname,'fmap',parms.participant_id,parms.session_id);
   if isempty(parms.fnames_t1w)
     fprintf('%s: WARNING: no processed T1w, skipping the registration check of %s\n',...
@@ -701,8 +778,9 @@ function qcinfo = check_fmap_regT1(fname,fname_info,parms)
   end
   [qcinfo,ec,em] = cmig_read_proc_json_epi(qcinfo,fname,fname_info);
   if ec || isempty(qcinfo.registration_matrix_T1)
-    fprintf('%s: WARNING: no registration matrix for %s, skipping its registration check %s\n',...
-      mfilename,fname,em);
+    errmsg = strtrim(sprintf('no registration matrix for %s, skipping its registration check %s',...
+      fname,em));
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
     return;
   end
   [~,fstem] = cmig_get_fileparts(fname);
@@ -713,7 +791,8 @@ function qcinfo = check_fmap_regT1(fname,fname_info,parms)
     'fname_plot',fname_plot,...
     'fspath',parms.fspath,'verbose',parms.verbose,'forceflag',parms.forceflag);
   if ec
-    fprintf('%s: WARNING: registration check of %s failed: %s\n',mfilename,fname,em);
+    errmsg = sprintf('registration check of %s failed: %s',fname,em);
+    fprintf('%s: WARNING: %s\n',mfilename,errmsg);
   end
 return;
 

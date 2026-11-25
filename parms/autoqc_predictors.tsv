@@ -1,0 +1,449 @@
+# autoqc_predictors.tsv: the predictors of the post QC prediction layer
+#   (cmig_autoqc_predictors.py), one row per column or pattern
+# modality  fsurf, t2, dmri, fmri (the manual post QC table it predicts)
+# table     compiled table (tabulated/<table>.tsv), or mahal (Mahalanobis
+#           distances, the <family>_mdist and _nanfrac columns
+#           cmig_autoqc_mahal.py writes)
+# type      exact (column is a full column name), pattern (column is a
+#           regular expression, full match), mahal (a column of the
+#           Mahalanobis table, full match; skipped when no such table is
+#           given)
+# task      blank for session columns; rest, mid, sst, nback for per-task
+#           fMRI columns (a missing task: a 0/1 indicator; raw QC columns
+#           the median of the session's other tasks, else the cohort median)
+# rules     post QC (mr_y_qc__post__aut): numeric automatic columns, not
+#           strings, the FreeSurfer version, scan counts, or columns defined
+#           for almost no session; raw QC (mr_y_qc__raw__*): only the __ok_
+#           columns (summaries over the ok series), not the ok counts
+#           (manual raw QC derived), sums over the ok series (fdsub) or
+#           acquisition parameters (TR, frames, voxel volume); motion
+#           (mr_y_qc__mot): dMRI and rsfMRI means and maxima, tfMRI the
+#           mean FD over the deconvolution's frames (fdsub__09), not
+#           counts, dof or TR; no manual QC columns
+modality	table	type	column	task	note
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topodfct_count		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topopatch_count		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topopatch_max		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topopatch_mean		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topopatch_min		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__topopatch_med		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__atlas__reg__corr_score		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__atlas__reg__fail_indicator		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__atlas__reg__vox__miss_prop		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__atlas__reg_rotat		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__atlas__reg_trans		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__fsurf__complete_indicator		post QC
+fsurf	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__input__match_indicator		post QC
+fsurf	mr_y_qc__raw__smri__t1	exact	mr_y_qc__raw__smri__t1__intensity__brain__ok_mean		raw QC, over the ok series
+fsurf	mr_y_qc__raw__smri__t1	exact	mr_y_qc__raw__smri__t1__intensity__brain__ok_std		raw QC, over the ok series
+fsurf	mr_y_qc__raw__smri__t1	exact	mr_y_qc__raw__smri__t1__vol__brain__ok_mean		raw QC, over the ok series
+fsurf	mr_y_qc__raw__smri__t1	exact	mr_y_qc__raw__smri__t1__intensity__brain__ok_snr		raw QC, over the ok series
+fsurf	mahal	mahal	fsurf_mdist		Mahalanobis distance
+fsurf	mahal	mahal	fsurf_nanfrac		Mahalanobis NaN fraction
+fsurf	mahal	mahal	sMRI_T1w_mdist		Mahalanobis distance
+fsurf	mahal	mahal	sMRI_T1w_nanfrac		Mahalanobis NaN fraction
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__rigid_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__warp_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__imgcorr1_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__imgcorr2_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__imgcorr_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__imgdist1_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__imgdist2_score		post QC
+t2	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__smri__t2__segreg__cost_score		post QC
+t2	mr_y_qc__raw__smri__t2	exact	mr_y_qc__raw__smri__t2__intensity__brain__ok_mean		raw QC, over the ok series
+t2	mr_y_qc__raw__smri__t2	exact	mr_y_qc__raw__smri__t2__intensity__brain__ok_std		raw QC, over the ok series
+t2	mr_y_qc__raw__smri__t2	exact	mr_y_qc__raw__smri__t2__vol__brain__ok_mean		raw QC, over the ok series
+t2	mr_y_qc__raw__smri__t2	exact	mr_y_qc__raw__smri__t2__intensity__brain__ok_snr		raw QC, over the ok series
+t2	mahal	mahal	sMRI_T2w_mdist		Mahalanobis distance
+t2	mahal	mahal	sMRI_T2w_nanfrac		Mahalanobis NaN fraction
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__unwarp_indicator		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0_rms		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rigid_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__warp_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b0__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b1000__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b2000__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b3000__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__b500__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__brain__cutoff__dorsal_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__brain__cutoff__ventral_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__brain__cutoff_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm__b0_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm__b1000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm__b2000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm__b3000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm__b500_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__norm_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel__b0_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel__b1000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel__b2000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel__b3000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel__b500_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__rel_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__dterr__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__ap__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__ap__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__ap__zdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__brain__cutoff__dorsal_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__brain__cutoff__ventral_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__brain__cutoff_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__imgcorr1_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__imgcorr2_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__imgcorr_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__imgdist1_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__imgdist2_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__regt1__segreg__cost_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__rigid_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__fm__warp_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__b0_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__b1000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__b2000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__b3000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__b500_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice__b0_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice__b1000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice__b2000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice__b3000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice__b500_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame__slice_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__frame_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__b0_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__b1000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__b2000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__b3000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__b500_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b0_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b0_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b1000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b1000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b2000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b2000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b3000_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b3000_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b500_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame__b500_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame_max		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice__frame_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__outlier__slice_nbad		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__imgcorr1_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__imgcorr2_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__imgcorr_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__imgdist1_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__imgdist2_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__regt1__segreg__cost_score		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm__b0_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm__b1000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm__b2000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm__b3000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm__b500_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__norm_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel__b0_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel__b1000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel__b2000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel__b3000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel__b500_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__rsierr__rel_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__temp__snr__b0_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__temp__snr__b1000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__temp__snr__b2000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__temp__snr__b3000_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__temp__snr__b500_med		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__xdir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__ydir_fwhm		post QC
+dmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__dmri__zdir_fwhm		post QC
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fa__brain__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fa__brain__ok_med		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fa__brain__ok_std		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__b0__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__b0__ok_med		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__b0__ok_std		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__brain__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__brain__ok_std		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__md__brain__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__md__brain__ok_med		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__md__brain__ok_std		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__mot__nody__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__mot__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__vol__brain__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__dterr__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__dterr__ok_med		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__dterr__ok_std		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fov__cutoff__dorsal__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fov__cutoff__ventral__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__intensity__brain__ok_snr		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__score__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__score__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__count__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__count__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__nframe__ok_count		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__score__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__score__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__nslice__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__nslice__ok_mean		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__extent__ok_prop		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__auto__line__fft__nframe__ok_count		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__pepolar__for__ok_mi		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__pepolar__rev__ok_mi		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__pepolar__diff__ok_mi		raw QC, over the ok series
+dmri	mr_y_qc__raw__dmri	exact	mr_y_qc__raw__dmri__fov__cutoff__ok_max		raw QC, over the ok series
+dmri	mr_y_qc__mot	exact	mr_y_qc__mot__dmri__mot_mean		motion
+dmri	mr_y_qc__mot	exact	mr_y_qc__mot__dmri__rotat_mean		motion
+dmri	mr_y_qc__mot	exact	mr_y_qc__mot__dmri__trans_mean		motion
+dmri	mahal	mahal	dMRI_DTI_mdist		Mahalanobis distance
+dmri	mahal	mahal	dMRI_DTI_nanfrac		Mahalanobis NaN fraction
+dmri	mahal	mahal	dMRI_RSI_mdist		Mahalanobis distance
+dmri	mahal	mahal	dMRI_RSI_nanfrac		Mahalanobis NaN fraction
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__b0__unwarp_indicator		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__b0_rms		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__temp__snr_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__intra__temp__snr_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__rigid_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__warp_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__b0__fallback_indicator		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__brain__cutoff__dorsal_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__brain__cutoff__ventral_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__brain__cutoff_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__dtr__xdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__dtr__ydir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__dtr__zdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__com__dist_max		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__corr_min		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__diff_rms		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__signal_cov		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__signal_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__signal_std		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__inter__temp__snr_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__pa__diff_rms		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__xdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__ydir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__ap__zdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__brain__cutoff__dorsal_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__brain__cutoff__ventral_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__brain__cutoff_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__com__dist_max		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__corr_min		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__diff_rms		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__signal_cov		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__signal_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__signal_std		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__inter__temp__snr_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__xdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__ydir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__fm__pa__zdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__com__dist_max		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__corr_min		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__intra__std_ratio		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__intra__temp__snr__med_ratio		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__intra__temp__snr_ratio		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__signal_cov		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__signal_mean		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__signal_std		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__inter__temp__snr_med		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__intra__signal_cov		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__intra__signal_std		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__intra__temp__snr_med		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__imgcorr1_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__imgcorr2_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__imgcorr_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__imgdist1_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__imgdist2_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__regt1__segreg__cost_score		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__xdir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__ydir_fwhm		post QC
+fmri	mr_y_qc__post__aut	exact	mr_y_qc__post__aut__fmri__zdir_fwhm		post QC
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__intensity__brain__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__intensity__brain__ok_std	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__mot__filt__nody__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__mot__filt__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__mot__nody__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__mot__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__snr__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__snr__ok_med	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__snr__ok_std	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__vol__brain__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__dtr__xdir__ok_fwhm	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__dtr__ydir__ok_fwhm	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__dtr__zdir__ok_fwhm	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__fov__cutoff__dorsal__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__fov__cutoff__ventral__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__intensity__brain__ok_snr	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__score__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__score__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__count__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__count__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__nframe__ok_count	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__score__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__score__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__nslice__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__nslice__ok_mean	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__extent__ok_prop	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__auto__line__fft__nframe__ok_count	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__pepolar__for__ok_mi	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__pepolar__rev__ok_mi	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__pepolar__diff__ok_mi	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__rsfmri	exact	mr_y_qc__raw__rsfmri__fov__cutoff__ok_max	rest	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__intensity__brain__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__intensity__brain__ok_std	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__mot__filt__nody__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__mot__filt__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__mot__nody__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__mot__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__snr__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__snr__ok_med	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__snr__ok_std	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__vol__brain__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__dtr__xdir__ok_fwhm	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__dtr__ydir__ok_fwhm	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__dtr__zdir__ok_fwhm	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__fov__cutoff__dorsal__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__fov__cutoff__ventral__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__intensity__brain__ok_snr	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__score__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__score__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__count__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__count__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__nframe__ok_count	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__score__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__score__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__nslice__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__nslice__ok_mean	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__extent__ok_prop	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__auto__line__fft__nframe__ok_count	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__pepolar__for__ok_mi	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__pepolar__rev__ok_mi	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__pepolar__diff__ok_mi	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__mid	exact	mr_y_qc__raw__tfmri__mid__fov__cutoff__ok_max	mid	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__intensity__brain__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__intensity__brain__ok_std	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__mot__filt__nody__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__mot__filt__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__mot__nody__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__mot__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__snr__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__snr__ok_med	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__snr__ok_std	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__vol__brain__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__dtr__xdir__ok_fwhm	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__dtr__ydir__ok_fwhm	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__dtr__zdir__ok_fwhm	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__fov__cutoff__dorsal__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__fov__cutoff__ventral__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__intensity__brain__ok_snr	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__score__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__score__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__count__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__count__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__nframe__ok_count	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__score__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__score__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__nslice__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__nslice__ok_mean	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__extent__ok_prop	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__auto__line__fft__nframe__ok_count	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__pepolar__for__ok_mi	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__pepolar__rev__ok_mi	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__pepolar__diff__ok_mi	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__sst	exact	mr_y_qc__raw__tfmri__sst__fov__cutoff__ok_max	sst	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__intensity__brain__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__intensity__brain__ok_std	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__mot__filt__nody__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__mot__filt__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__mot__nody__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__mot__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__snr__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__snr__ok_med	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__snr__ok_std	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__vol__brain__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__dtr__xdir__ok_fwhm	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__dtr__ydir__ok_fwhm	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__dtr__zdir__ok_fwhm	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__fov__cutoff__dorsal__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__fov__cutoff__ventral__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__intensity__brain__ok_snr	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__score__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__score__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__count__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__count__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__nframe__ok_count	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__score__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__score__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__nslice__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__nslice__ok_mean	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__extent__ok_prop	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__auto__line__fft__nframe__ok_count	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__pepolar__for__ok_mi	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__pepolar__rev__ok_mi	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__pepolar__diff__ok_mi	nback	raw QC, over the ok series
+fmri	mr_y_qc__raw__tfmri__nback	exact	mr_y_qc__raw__tfmri__nback__fov__cutoff__ok_max	nback	raw QC, over the ok series
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__trans_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__trans_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__censor_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__censor_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__trans__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__trans__censor_max	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__xdir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__xdir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__xdir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__xdir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__ydir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__ydir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__ydir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__ydir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__zdir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__mot__zdir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__zdir_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__rsfmri__rotat__zdir__censor_mean	rest	motion
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__tfmri__mid__mot__fdsub__09_mean	mid	motion, deconvolution frames
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__tfmri__sst__mot__fdsub__09_mean	sst	motion, deconvolution frames
+fmri	mr_y_qc__mot	exact	mr_y_qc__mot__tfmri__nback__mot__fdsub__09_mean	nback	motion, deconvolution frames
+fmri	mahal	mahal	rsfMRI_corr_mdist	rest	Mahalanobis distance
+fmri	mahal	mahal	rsfMRI_corr_nanfrac	rest	Mahalanobis NaN fraction
+fmri	mahal	mahal	rsfMRI_subcort_mdist	rest	Mahalanobis distance
+fmri	mahal	mahal	rsfMRI_subcort_nanfrac	rest	Mahalanobis NaN fraction
+fmri	mahal	mahal	rsfMRI_var_mdist	rest	Mahalanobis distance
+fmri	mahal	mahal	rsfMRI_var_nanfrac	rest	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_MID_mdist	mid	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_MID_nanfrac	mid	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_MID_corr_mdist	mid	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_MID_corr_nanfrac	mid	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_SST_mdist	sst	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_SST_nanfrac	sst	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_SST_corr_mdist	sst	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_SST_corr_nanfrac	sst	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_nBack_mdist	nback	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_nBack_nanfrac	nback	Mahalanobis NaN fraction
+fmri	mahal	mahal	tfMRI_nBack_corr_mdist	nback	Mahalanobis distance
+fmri	mahal	mahal	tfMRI_nBack_corr_nanfrac	nback	Mahalanobis NaN fraction
